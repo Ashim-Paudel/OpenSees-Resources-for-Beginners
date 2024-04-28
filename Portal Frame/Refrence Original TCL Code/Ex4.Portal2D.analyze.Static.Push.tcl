@@ -32,7 +32,7 @@ if {$ok != 0} {
 	set Dstep 0.0;
 	set ok 0
 	while {$Dstep <= 1.0 && $ok == 0} {	
-		set controlDisp [nodeDisp $IDctrlNode $IDctrlDOF ]
+		set controlDisp [nodeDisp $IDctrlNode $IDctrlDOF]
 		set Dstep [expr $controlDisp/$Dmax]
 		set ok [analyze 1 ]
 		# if analysis fails, we try some other stuff
