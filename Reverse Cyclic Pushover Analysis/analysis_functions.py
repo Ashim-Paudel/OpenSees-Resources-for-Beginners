@@ -206,7 +206,7 @@ def cyclicAnalysis_DCD(loadProtocol = [0.02,0.05], Nrepeat = [2,2], dx = 0.0001*
                 i += 1
                 
                 if status != 0:
-                    status = analysisLoopCyclicDCD(status, i, dx, controlNode, controlNodeDof)
+                    status = analysisLoopCyclicDCD(status, i, dx, controlNode, controlNodeDof) 
                 if status != 0:
                     print("Breaking Analysis! Analysis Failed")
                     return

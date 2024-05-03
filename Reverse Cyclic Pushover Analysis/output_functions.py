@@ -26,7 +26,7 @@ def plotPushover(AnalysisType):
     base_shear = -reactions[:, 1]
 
     fig, ax = plt.subplots()
-    #ax.plot(disp_x, base_shear)
-    fig.savefig(f"BackBone Curve - Cyclic {AnalysisType}", dpi='high')
+    ax.plot(disp_x, base_shear)
+    fig.savefig(f"BackBone Curve - Cyclic {AnalysisType}")
 
     
