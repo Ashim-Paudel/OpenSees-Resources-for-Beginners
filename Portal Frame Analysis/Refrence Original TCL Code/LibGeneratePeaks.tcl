@@ -8,7 +8,7 @@ proc GeneratePeaks {Dmax {DincrStatic 0.01} {CycleType "Full"} {Fact 1} } {;	# g
 	# input variables
 	#	$Dmax	: peak displacement (can be + or negative)
 	#	$DincrStatic	: displacement increment (optional, default=0.01, independently of units)
-	#	$CycleType	: Full (0->+peak), Half (0->+peak->0), Full (0->+peak->0->-peak->0)   (optional, def=Full)
+	#	$CycleType	: Push (0->+peak), Half (0->+peak->0), Full (0->+peak->0->-peak->0)   (optional, def=Full)
 	#	$Fact	: scaling factor (optional, default=1)
 	#	$iDstepFileName	: file name where displacement history is stored temporarily, until next disp. peak
 	# output variable
