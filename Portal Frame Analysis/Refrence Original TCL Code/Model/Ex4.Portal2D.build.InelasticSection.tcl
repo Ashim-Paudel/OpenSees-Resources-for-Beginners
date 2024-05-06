@@ -79,7 +79,7 @@ set MyCol [expr 130000*$kip*$in];		# yield moment
 set PhiYCol [expr 0.65e-4/$in];			# yield curvature
 set EIColCrack [expr $MyCol/$PhiYCol];	# cracked section inertia
 set b 0.01 ;				# strain-hardening ratio (ratio between post-yield tangent and initial elastic tangent)
-uniaxialMaterial Steel01 $ColMatTagFlex $MyCol $EIColCrack $b; 		# bilinear behavior for flexure
+uniaxialMaterial Steel01 $ColMatTagFlex $MyCol $EIColCrack $b; 		
 uniaxialMaterial Elastic $ColMatTagAxial $EACol;				# this is not used as a material, this is an axial-force-strain response
 section Aggregator $ColSecTag $ColMatTagAxial P $ColMatTagFlex Mz;	# combine axial and flexural behavior into one section (no P-M interaction here)
 
