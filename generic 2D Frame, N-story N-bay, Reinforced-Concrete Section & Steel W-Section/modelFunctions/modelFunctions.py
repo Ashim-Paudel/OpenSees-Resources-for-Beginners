@@ -9,6 +9,7 @@ import matplotlib.pyplot as plt
 
 # user def modules
 from modelUnits import *
+from buildFiberSection import *
 
 # Sign Convention
 # All column related tags will proceed with 1
@@ -52,7 +53,7 @@ def getModel(NBay, NStory, LBeam, LCol, sectionType = 'Elastic'):
     level = 1
     iSupportNode = [int(f"{level}{i+1}") for i in range(0, NBay + 1 )]
 
-    # Set up parameters that are particular to the model for displacement control
+    # up parameters that are particular to the model for displacement control
     IDctrlNode =  (NStory+1)*10+1		# node where displacement is read for displacement control
     IDctrlDOF =  1	                    # DoF of displacement read for displacement control
     LBuilding =  NStory*LCol	        # total building height
@@ -60,6 +61,12 @@ def getModel(NBay, NStory, LBeam, LCol, sectionType = 'Elastic'):
     # building up the elements
     if sectionType == 'Elastic':
         getElasticSection()
+    elif sectionType == 'InElastic':
+        getInelasticSection()
+    elif sectionType == 'RCFiber':
+        getRCFiberSection()
+    elif sectionType == 'SteelFiber':
+        getSteelFiberSection()
 
     for nod in iSupportNode:
         print(ops.nodeCoord(nod))
@@ -148,4 +155,102 @@ def getInelasticSection():
     ops.uniaxialMaterial('Elastic', BeamMatTagAxial, EABeam)
     ops.section('Aggregator', BeamSecTag, *[BeamMatTagAxial, 'P', BeamMatTagFlex, 'Mz'])
 
-getModel(NBay=3, NStory=3, LBeam=3, LCol=3)
+    ops.geomTransf(ColSecTransfType, ColSecTransf)
+    ops.geomTransf('Linear', BeamSecTransf)
+
+
+
+def getRCFiberSection():
+    ### MATERIAL PROPERTIES  ###
+    # General Material parameters
+    G = 1.e10		# make stiff shear modulus
+    J = 1.0			# torsional section stiffness (G makes GJ large)
+    GJ =  G*J
+
+    # confined and unconfined CONCRETE
+    # nominal concrete compressive strength
+    fc = -4.0*ksi		        # CONCRETE Compressive Strength, ksi   (+Tension, -Compression)
+    Ec = 57*ksi*pow((-fc/psi), .5)	# Concrete Elastic Modulus
+    nu = 0.2
+    Gc = Ec/(2.*(1+nu))	        # Torsional stiffness Modulus
+    # confined concrete
+    Kfc = 1.3			        # ratio of confined to unconfined concrete strength
+    Kres = 0.2			        # ratio of residual/ultimate to maximum stress
+    fc1C = Kfc*fc		        # CONFINED concrete (mander model), maximum stress
+    eps1C = 2.*fc1C/Ec	        # strain at maximum stress 
+    fc2C = Kres*fc1C		    # ultimate stress
+    eps2C =  20*eps1C		    # strain at ultimate stress 
+    lambda_ =  0.1			    # ratio between unloading slope at eps2 and initial slope Ec
+    # unconfined concrete
+    fc1U = fc			        # UNCONFINED concrete (todeschini parabolic model), maximum stress
+    eps1U = -0.003			    # strain at maximum strength of unconfined concrete
+    fc2U = Kres*fc1U		    # ultimate stress
+    eps2U = -0.01			    # strain at ultimate stress
+    # tensile-strength properties
+    ftC = -0.14*fc1C	        # tensile strength +tension
+    ftU = -0.14*fc1U		    # tensile strength +tension
+    Ets = ftU/0.002		        # tension softening stiffness
+
+    # Core and Cover Concrete define
+    IDconcCore = 1
+    IDconcCover = 2
+    ops.uniaxialMaterial('Concrete02', IDconcCore, fc1C, eps1C, fc2C, eps2C, lambda_, ftC, Ets)	# Core concrete (confined)
+    ops.uniaxialMaterial('Concrete02', IDconcCover, fc1U, eps1U, fc2U, eps2U, lambda_, ftU, Ets)	# Cover concrete (unconfined)
+
+    # REINFORCING STEEL parameters
+    Fy = 66.8*ksi		        # STEEL yield stress
+    Es = 29000.*ksi		        # modulus of steel
+    Bs = 0.01			        # strain-hardening ratio 
+    R0 = 18			            # control the transition from elastic to plastic branches
+    cR1 = 0.925			        # control the transition from elastic to plastic branches
+    cR2 = 0.15			        # control the transition from elastic to plastic branches
+
+    IDSteel = 3
+    ops.uniaxialMaterial('Steel02', IDSteel, Fy, Es, Bs, R0, cR1, cR2)
+
+
+    ### FIBER SECTION PARAMETERS ###
+    # Section Geometry:
+    HCol = 24*inch	# square-Column width
+    BCol = HCol
+    HBeam = 42*inch	# Beam depth -- perpendicular to bending axis
+    BBeam = 24*inch	# Beam width -- parallel to bending axis
+
+    # Column section geometry:
+    cover = 2.5*inch	            # rectangular-RC-Column cover
+    numBarsTopCol = 8		        # number of longitudinal-reinforcement bars on top layer
+    numBarsBotCol = 8		        # number of longitudinal-reinforcement bars on bottom layer
+    numBarsIntCol = 6		        # TOTAL number of reinforcing bars on the intermediate layers
+    barAreaTopCol = 1.*sqinch	    # longitudinal-reinforcement bar area
+    barAreaBotCol = 1.*sqinch	    # longitudinal-reinforcement bar area
+    barAreaIntCol = 1.*sqinch	    # longitudinal-reinforcement bar area
+
+    #Beam Section Geometry
+    numBarsTopBeam = 6		        # number of longitudinal-reinforcement bars on top layer
+    numBarsBotBeam = 6		        # number of longitudinal-reinforcement bars on bottom layer
+    numBarsIntBeam = 2		        # TOTAL number of reinforcing bars on the intermediate layers
+    barAreaTopBeam =  1.*sqinch	    # longitudinal-reinforcement bar area
+    barAreaBotBeam =  1.*sqinch	    # longitudinal-reinforcement bar area
+    barAreaIntBeam =  1.*sqinch	    # longitudinal-reinforcement bar area
+
+    nfCoreY = 20		            # number of fibers in the core patch in the y direction
+    nfCoreZ = 20	            # number of fibers in the core patch in the z direction
+    nfCoverY = 20		            # number of fibers in the cover patches with long sides in the y direction
+    nfCoverZ = 20		            # number of fibers in the cover patches with long sides in the z direction
+    # rectangular section with one layer of steel evenly distributed around the perimeter and a confined core.
+    BuildRCrectSection(ColSecTag, HCol, BCol, cover, cover, IDconcCore, IDconcCover, 
+                       IDSteel, numBarsTopCol, barAreaTopCol, numBarsBotCol, barAreaBotCol, numBarsIntCol,
+                       barAreaIntCol, nfCoreY, nfCoreZ, nfCoverY, nfCoverZ, False)
+    
+    BuildRCrectSection(BeamSecTag, HBeam, BBeam, cover, cover, IDconcCore, IDconcCover, 
+                       IDSteel, numBarsTopBeam, barAreaTopBeam, numBarsBotBeam, barAreaBotBeam, numBarsIntBeam,
+                       barAreaIntBeam, nfCoreY, nfCoreZ, nfCoverY, nfCoverZ, True)
+    
+    ops.geomTransf(ColSecTransfType, ColSecTransf)
+    ops.geomTransf('Linear', BeamSecTransf)
+
+
+def getSteelFiberSection():
+    pass
+
+getModel(NBay=3, NStory=3, LBeam=3, LCol=3, sectionType='RCFiber')
