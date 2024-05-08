@@ -67,23 +67,71 @@ def BuildRCrectSection(id, HSec, BSec, coverH, coverB, coreID, coverID, steelID,
     ops.layer('straight', steelID, numBarsInt, barAreaInt, *[-coreY, -coreZ, coreY, -coreZ])	# intermediate skin reinf. -z
     ops.layer('straight', steelID, numBarsTop, barAreaTop, *[coreY, coreZ, coreY, -coreZ])	# top layer reinfocement
     ops.layer('straight', steelID, numBarsBot, barAreaBot, *[-coreY, coreZ,  -coreY, -coreZ])	# bottom layer reinforcement
-
-    fibSecList = [['section', 'Fiber', id],
-                    ['patch', 'quad', coreID, nfCoreZ, nfCoreY, *[-coreY, coreZ, -coreY, -coreZ, coreY, -coreZ, coreY, coreZ]],
-                    ['patch', 'quad', coverID, 2, nfCoverY, *[-coverY, coverZ, -coreY, coreZ, coreY, coreZ, coverY, coverZ]], 
-                    ['patch', 'quad', coverID, 2, nfCoverY, *[-coreY, -coreZ, -coverY, -coverZ, coverY, -coverZ, coreY, -coreZ]], 
-                    ['patch', 'quad', coverID, nfCoverZ, 2, *[-coverY, coverZ, -coverY, -coverZ, -coreY, -coreZ, -coreY, coreZ]], 
-                    ['patch', 'quad', coverID, nfCoverZ, 2, *[coreY, coreZ, coreY, -coreZ, coverY, -coverZ, coverY, coverZ]],	
-                    ['layer', 'straight', steelID, numBarsInt, barAreaInt,  *[-coreY, coreZ, coreY, coreZ]],	
-                    ['layer', 'straight', steelID, numBarsInt, barAreaInt,  *[-coreY, -coreZ, coreY, -coreZ]],	
-                    ['layer', 'straight', steelID, numBarsTop, barAreaTop, *[coreY, coreZ, coreY, -coreZ]],	
-                    ['layer', 'straight', steelID, numBarsBot, barAreaBot,  *[-coreY, coreZ,  -coreY, -coreZ]]
-            ]
     
     if plotFibSec:
+        fibSecList = [['section', 'Fiber', id],
+                        ['patch', 'quad', coreID, nfCoreZ, nfCoreY, *[-coreY, coreZ, -coreY, -coreZ, coreY, -coreZ, coreY, coreZ]],
+                        ['patch', 'quad', coverID, 2, nfCoverY, *[-coverY, coverZ, -coreY, coreZ, coreY, coreZ, coverY, coverZ]], 
+                        ['patch', 'quad', coverID, 2, nfCoverY, *[-coreY, -coreZ, -coverY, -coverZ, coverY, -coverZ, coreY, -coreZ]], 
+                        ['patch', 'quad', coverID, nfCoverZ, 2, *[-coverY, coverZ, -coverY, -coverZ, -coreY, -coreZ, -coreY, coreZ]], 
+                        ['patch', 'quad', coverID, nfCoverZ, 2, *[coreY, coreZ, coreY, -coreZ, coverY, -coverZ, coverY, coverZ]],	
+                        ['layer', 'straight', steelID, numBarsInt, barAreaInt,  *[-coreY, coreZ, coreY, coreZ]],	
+                        ['layer', 'straight', steelID, numBarsInt, barAreaInt,  *[-coreY, -coreZ, coreY, -coreZ]],	
+                        ['layer', 'straight', steelID, numBarsTop, barAreaTop, *[coreY, coreZ, coreY, -coreZ]],	
+                        ['layer', 'straight', steelID, numBarsBot, barAreaBot,  *[-coreY, coreZ,  -coreY, -coreZ]]
+                ]
+        
         matcolor = ['r', 'lightgrey', 'gold', 'r', 'r', 'r']
         ovs.plot_fiber_section(fibSecList, matcolor=matcolor)
         plt.axis('equal')
         plt.title('Fiber Section of the RCC Colum')
         plt.show()
 
+def BuildSteelWSection(secTag, matTag, d, bf, tw, tf, nfdw, nftw, nfbf, nftf, plotSection = True):
+    """
+    # Build a Fiber Section of Steel-W-Section from section geometry
+
+    ## Arguments:
+    **secTag**: Unique section identifier for the section to be formed
+    **matTag**: Predefined material tag
+    **d**: Depth of section
+    **bf*: Width of flange
+    **tw**: Thickness of Web
+    **tf**: Flange thickness
+    **nfdw**: Number of fibres in web along depth of web
+    **nftw**: Number of fibers in web along thickness
+    **nfbf**: Number of fibres in flange along its width
+    **nftf**: Number of fibres in flange along its thickness
+    **plotSection**: Whether to plot section or not
+    """
+
+    dw = d - 2 * tf
+    # y coordinates starting from botttom
+    y1 = -d/2
+    y2 = - dw/2
+    y3 = dw/2
+    y4 = d/2
+    # z coordinates starting from right
+    z1 = -bf/2
+    z2 = -tw/2
+    z3 = tw/2
+    z4 = bf/2
+
+    ops.section('Fiber', secTag)
+    ops.patch('rect', matTag, nftf, nfbf, *[y1, z1, y2, z4]) # bottom flange
+    ops.patch('rect', matTag, nfdw, nftw, *[y2, z2, y3, z3]) # web
+    ops.patch('rect', matTag, nftf, nfbf, *[y3, z1, y4, z4]) # top flange
+
+    if plotSection:
+        fibSecList = [
+            ['section','Fiber', secTag],
+            ['patch','rect', matTag, nftf, nfbf, *[y1, z1, y2, z4]], # bottom flange
+            ['patch','rect', matTag, nfdw, nftw, *[y2, z2, y3, z3]], # web
+            ['patch','rect', matTag, nftf, nfbf, *[y3, z1, y4, z4]]  # top flange
+        ]
+
+        matcolor = ['r', 'lightgrey', 'gold', 'r', 'r', 'r']
+        ovs.plot_fiber_section(fibSecList, matcolor=matcolor)
+        plt.axis('equal')
+        plt.title('Steel W-Section')
+        plt.show()

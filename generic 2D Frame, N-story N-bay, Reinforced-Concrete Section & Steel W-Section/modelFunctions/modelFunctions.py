@@ -9,7 +9,7 @@ import matplotlib.pyplot as plt
 
 # user def modules
 from modelUnits import *
-from buildFiberSection import *
+import buildFiberSection
 
 # Sign Convention
 # All column related tags will proceed with 1
@@ -32,7 +32,18 @@ BeamSecTransf = 2
 ColSecTransfType = 'Linear'
 
 # model building function
-def getModel(NBay, NStory, LBeam, LCol, sectionType = 'Elastic'):
+def getModel(NBay, NStory, LBeam, LCol, sectionType = 'Elastic', startCoor = (0.0 ,0.0)):
+    """
+    # Build a building model with parameters given
+
+    ## Arguments
+    NBay = no. of bays
+    NStory = No. of storeys
+    LBeam = Beam Length
+    LCol = Column Length
+    sectionType = any one of ['Elastic', 'InElastic', 'RCFiber', 'SteelFiber']
+    startCoor = Coordinate of bottom left node of building default (0,0)
+    """
     ops.wipe()
 
     ops.model('BasicBuilder', '-ndm', 2, '-ndf', 3)
@@ -41,7 +52,7 @@ def getModel(NBay, NStory, LBeam, LCol, sectionType = 'Elastic'):
         for i in range(NBay + 1):
             # nodeTag = j * (NBay+1) + i + 1 # conventional node tag
             nodeTag = int(f"{j+1}{i+1}") #example: nodeTag 11 means 1st node of ground floor (1st floor)
-            nodeCoor = (i * LBeam, j * LCol)
+            nodeCoor = (startCoor[0] + i * LBeam, startCoor[1] + j * LCol)
             
             print(nodeTag, *nodeCoor)
             ops.node(nodeTag, *(nodeCoor))
@@ -71,11 +82,11 @@ def getModel(NBay, NStory, LBeam, LCol, sectionType = 'Elastic'):
     for nod in iSupportNode:
         print(ops.nodeCoord(nod))
 
-    # Building the elements
+    # Building the Beam and Column Elements
     numItgrPts = 5
     colNameId = 1                               #elements starting with this for col
     beamNameId = 2
-
+    # Column elements
     for j in range(NStory):
         for i in range(NBay + 1):
             # nodeTag = j * (NBay+1) + i + 1    # conventional node tag
@@ -86,7 +97,8 @@ def getModel(NBay, NStory, LBeam, LCol, sectionType = 'Elastic'):
 
             # element('nonlinearBeamColumn', eleTag, *eleNodes, numIntgrPts, secTag, transfTag)
             ops.element('nonlinearBeamColumn', eleColTag, *[inodeTag, jnodeTag], numItgrPts, ColSecTag, ColSecTransf)
-
+    
+    # Beam elements
     for j in range(1, NStory + 1): #because we dont have beam at ground level
         for i in range(NBay):
             # nodeTag = j * (NBay+1) + i + 1 # conventional node tag
@@ -97,6 +109,8 @@ def getModel(NBay, NStory, LBeam, LCol, sectionType = 'Elastic'):
 
             ops.element('nonlinearBeamColumn', eleBeamTag, *[inodeTag, jnodeTag], numItgrPts, BeamSecTag, BeamSecTransf)
 
+    ovs.plot_model()
+    plt.show()
 
 def getElasticSection():
     # section geometry
@@ -160,7 +174,7 @@ def getInelasticSection():
 
 
 
-def getRCFiberSection():
+def getRCFiberSection(plotSection = False):
     ### MATERIAL PROPERTIES  ###
     # General Material parameters
     G = 1.e10		# make stiff shear modulus
@@ -238,19 +252,57 @@ def getRCFiberSection():
     nfCoverY = 20		            # number of fibers in the cover patches with long sides in the y direction
     nfCoverZ = 20		            # number of fibers in the cover patches with long sides in the z direction
     # rectangular section with one layer of steel evenly distributed around the perimeter and a confined core.
-    BuildRCrectSection(ColSecTag, HCol, BCol, cover, cover, IDconcCore, IDconcCover, 
+    buildFiberSection.BuildRCrectSection(ColSecTag, HCol, BCol, cover, cover, IDconcCore, IDconcCover, 
                        IDSteel, numBarsTopCol, barAreaTopCol, numBarsBotCol, barAreaBotCol, numBarsIntCol,
-                       barAreaIntCol, nfCoreY, nfCoreZ, nfCoverY, nfCoverZ, False)
+                       barAreaIntCol, nfCoreY, nfCoreZ, nfCoverY, nfCoverZ, plotSection)
     
-    BuildRCrectSection(BeamSecTag, HBeam, BBeam, cover, cover, IDconcCore, IDconcCover, 
+    buildFiberSection.BuildRCrectSection(BeamSecTag, HBeam, BBeam, cover, cover, IDconcCore, IDconcCover, 
                        IDSteel, numBarsTopBeam, barAreaTopBeam, numBarsBotBeam, barAreaBotBeam, numBarsIntBeam,
-                       barAreaIntBeam, nfCoreY, nfCoreZ, nfCoverY, nfCoverZ, True)
+                       barAreaIntBeam, nfCoreY, nfCoreZ, nfCoverY, nfCoverZ, plotSection)
     
     ops.geomTransf(ColSecTransfType, ColSecTransf)
     ops.geomTransf('Linear', BeamSecTransf)
 
 
-def getSteelFiberSection():
-    pass
+def getSteelFiberSection(plotSection = False):
+    #### MATERIAL PROPERTIES ####
+    Fy = 60.0*ksi
+    Es = 29000*ksi		# Steel Young's Modulus
+    nu = 0.3
+    Gs = Es/(2.*(1+nu)) # Torsional stiffness Modulus
+    Hiso = 0
+    Hkin = 1000
+    matIDhard = 1
+    # uniaxialMaterial('Hardening', matTag, E, sigmaY, H_iso, H_kin, eta=0.0)
+    ops.uniaxialMaterial('Hardening', matIDhard, Es, Fy, Hiso, Hkin)
 
-getModel(NBay=3, NStory=3, LBeam=3, LCol=3, sectionType='RCFiber')
+    #### SECTION PROPERTIES ####
+    # Structural-Steel W-section properties
+    # COLUMN SECTION: W27x114
+    dCol = 27.29*inch	        # depth
+    bfCol = 10.07*inch	        # flange width
+    tfCol = 0.93*inch	        # flange thickness
+    twCol = 0.57*inch	        # web thickness
+    nfdw = 16		            # number of fibers along dw
+    nftw = 2		            # number of fibers along tw
+    nfbf = 16		            # number of fibers along bf
+    nftf = 4			        # number of fibers along tf
+
+    buildFiberSection.BuildSteelWSection(ColSecTag, matIDhard, 
+                                         dCol, bfCol, tfCol, twCol, nfdw, nftw, nfbf, nftf, plotSection)
+    # BEAM SECTION: W24x94
+    dBeam =  24.31*inch	        # depth
+    bfBeam =  9.065*inch	    # flange width
+    tfBeam =  0.875*inch	    # flange thickness
+    twBeam = 0.515*inch	        # web thickness
+    nfdw = 16		            # number of fibers along dw
+    nftw = 2		            # number of fibers along tw
+    nfbf = 16		            # number of fibers along bf
+    nftf = 4			        # number of fibers along tf
+    buildFiberSection.BuildSteelWSection(BeamSecTag, matIDhard, 
+                                         dBeam, bfBeam, tfBeam, twBeam, nfdw, nftw, nfbf, nftf, plotSection)
+
+    ops.geomTransf(ColSecTransfType, ColSecTransf)
+    ops.geomTransf('Linear', BeamSecTransf)
+
+getModel(NBay=2, NStory=5, LBeam=4, LCol=3, sectionType='SteelFiber', startCoor=(0,0))
