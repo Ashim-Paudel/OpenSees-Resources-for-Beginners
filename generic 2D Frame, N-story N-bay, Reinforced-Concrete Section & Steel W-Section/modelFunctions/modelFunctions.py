@@ -32,26 +32,28 @@ BeamSecTransf = 2
 ColSecTransfType = 'Linear'
 
 # model building function
-def getModel(NBay, NStory, LBeam, LCol, sectionType = 'Elastic', startCoor = (0.0 ,0.0)):
+def getModel(buildingID, NBay, NStory, LBeam, LCol, sectionType = 'Elastic', startCoor = (0.0 ,0.0)):
     """
     # Build a building model with parameters given
 
     ## Arguments
+    buildingID = start building id with 100 [100, 200, 300, 400] etc
     NBay = no. of bays
     NStory = No. of storeys
     LBeam = Beam Length
     LCol = Column Length
     sectionType = any one of ['Elastic', 'InElastic', 'RCFiber', 'SteelFiber']
     startCoor = Coordinate of bottom left node of building default (0,0)
+    
     """
-    ops.wipe()
+    #ops.wipe()
 
-    ops.model('BasicBuilder', '-ndm', 2, '-ndf', 3)
+    #ops.model('BasicBuilder', '-ndm', 2, '-ndf', 3)
 
     for j in range(NStory + 1):
         for i in range(NBay + 1):
             # nodeTag = j * (NBay+1) + i + 1 # conventional node tag
-            nodeTag = int(f"{j+1}{i+1}") #example: nodeTag 11 means 1st node of ground floor (1st floor)
+            nodeTag = int(f"{buildingID}{j+1}{i+1}") #example: nodeTag 10011 means 1st building(100) 1st node of ground floor (1st floor) 
             nodeCoor = (startCoor[0] + i * LBeam, startCoor[1] + j * LCol)
             
             print(nodeTag, *nodeCoor)
@@ -62,7 +64,7 @@ def getModel(NBay, NStory, LBeam, LCol, sectionType = 'Elastic', startCoor = (0.
 
     # determine support nodes where ground motions are input, for multiple-support excitation
     level = 1
-    iSupportNode = [int(f"{level}{i+1}") for i in range(0, NBay + 1 )]
+    iSupportNode = [int(f"{buildingID}{level}{i+1}") for i in range(0, NBay + 1 )]
 
     # up parameters that are particular to the model for displacement control
     IDctrlNode =  (NStory+1)*10+1		# node where displacement is read for displacement control
@@ -75,13 +77,14 @@ def getModel(NBay, NStory, LBeam, LCol, sectionType = 'Elastic', startCoor = (0.
     elif sectionType == 'InElastic':
         getInelasticSection()
     elif sectionType == 'RCFiber':
-        getRCFiberSection()
+        getRCFiberSection(buildingID)
     elif sectionType == 'SteelFiber':
-        getSteelFiberSection()
+        getSteelFiberSection(buildingID)
 
     for nod in iSupportNode:
         print(ops.nodeCoord(nod))
 
+    
     # Building the Beam and Column Elements
     numItgrPts = 5
     colNameId = 1                               #elements starting with this for col
@@ -90,9 +93,9 @@ def getModel(NBay, NStory, LBeam, LCol, sectionType = 'Elastic', startCoor = (0.
     for j in range(NStory):
         for i in range(NBay + 1):
             # nodeTag = j * (NBay+1) + i + 1    # conventional node tag
-            eleColTag = int(f"{colNameId}{j+1}{i+1}") #example: nodeTag 11 means 1st node of ground floor (1st floor)
-            inodeTag = int(f"{j+1}{i+1}")
-            jnodeTag = int(f"{j+2}{i+1}")
+            eleColTag = int(f"{buildingID}{colNameId}{j+1}{i+1}") #example: nodeTag 11 means 1st node of ground floor (1st floor)
+            inodeTag = int(f"{buildingID}{j+1}{i+1}")
+            jnodeTag = int(f"{buildingID}{j+2}{i+1}")
             print(eleColTag, inodeTag, jnodeTag, ops.nodeCoord(inodeTag), ops.nodeCoord(jnodeTag))
 
             # element('nonlinearBeamColumn', eleTag, *eleNodes, numIntgrPts, secTag, transfTag)
@@ -102,15 +105,13 @@ def getModel(NBay, NStory, LBeam, LCol, sectionType = 'Elastic', startCoor = (0.
     for j in range(1, NStory + 1): #because we dont have beam at ground level
         for i in range(NBay):
             # nodeTag = j * (NBay+1) + i + 1 # conventional node tag
-            eleBeamTag = int(f"{beamNameId}{j+1}{i+1}") #example: nodeTag 11 means 1st node of ground floor (1st floor)
-            inodeTag = int(f"{j+1}{i+1}")
-            jnodeTag = int(f"{j+1}{i+2}")
+            eleBeamTag = int(f"{buildingID}{beamNameId}{j+1}{i+1}") #example: nodeTag 11 means 1st node of ground floor (1st floor)
+            inodeTag = int(f"{buildingID}{j+1}{i+1}")
+            jnodeTag = int(f"{buildingID}{j+1}{i+2}")
             print(eleBeamTag, inodeTag, jnodeTag, ops.nodeCoord(inodeTag), ops.nodeCoord(jnodeTag))
 
             ops.element('nonlinearBeamColumn', eleBeamTag, *[inodeTag, jnodeTag], numItgrPts, BeamSecTag, BeamSecTransf)
 
-    ovs.plot_model()
-    plt.show()
 
 def getElasticSection():
     # section geometry
@@ -169,12 +170,19 @@ def getInelasticSection():
     ops.uniaxialMaterial('Elastic', BeamMatTagAxial, EABeam)
     ops.section('Aggregator', BeamSecTag, *[BeamMatTagAxial, 'P', BeamMatTagFlex, 'Mz'])
 
-    ops.geomTransf(ColSecTransfType, ColSecTransf)
-    ops.geomTransf('Linear', BeamSecTransf)
 
 
+def getRCFiberSection(buildingID, plotSection = False):
+    ### CHANGING GLOBAL PARAMETERS FOR DIFFERNET BUILDING IDS ###
+    global ColSecTag, BeamSecTag, ColSecTransf, BeamSecTransf  # assigning global
 
-def getRCFiberSection(plotSection = False):
+    ### SECTION TAGS ###
+    ColSecTag = int(f"{buildingID}{1}")
+    BeamSecTag = int(f"{buildingID}{2}")
+    ### TRANSFORMATION TAGS ###
+    ColSecTransf = int(f"{buildingID}{1}")
+    BeamSecTransf = int(f"{buildingID}{2}")
+
     ### MATERIAL PROPERTIES  ###
     # General Material parameters
     G = 1.e10		# make stiff shear modulus
@@ -206,8 +214,8 @@ def getRCFiberSection(plotSection = False):
     Ets = ftU/0.002		        # tension softening stiffness
 
     # Core and Cover Concrete define
-    IDconcCore = 1
-    IDconcCover = 2
+    IDconcCore = int(f"{buildingID}{1}")  # material id followed by building id
+    IDconcCover = int(f"{buildingID}{2}") # material id followed by building id
     ops.uniaxialMaterial('Concrete02', IDconcCore, fc1C, eps1C, fc2C, eps2C, lambda_, ftC, Ets)	# Core concrete (confined)
     ops.uniaxialMaterial('Concrete02', IDconcCover, fc1U, eps1U, fc2U, eps2U, lambda_, ftU, Ets)	# Cover concrete (unconfined)
 
@@ -219,7 +227,7 @@ def getRCFiberSection(plotSection = False):
     cR1 = 0.925			        # control the transition from elastic to plastic branches
     cR2 = 0.15			        # control the transition from elastic to plastic branches
 
-    IDSteel = 3
+    IDSteel = int(f"{buildingID}{3}") # material id followed by building id
     ops.uniaxialMaterial('Steel02', IDSteel, Fy, Es, Bs, R0, cR1, cR2)
 
 
@@ -264,7 +272,18 @@ def getRCFiberSection(plotSection = False):
     ops.geomTransf('Linear', BeamSecTransf)
 
 
-def getSteelFiberSection(plotSection = False):
+def getSteelFiberSection(buildingID, plotSection = False):
+    ### CHANGING GLOBAL PARAMETERS FOR DIFFERNET BUILDING IDS ###
+    global ColSecTag, BeamSecTag, ColSecTransf, BeamSecTransf  # assigning global
+
+    ### SECTION TAGS ###
+    ColSecTag = int(f"{buildingID}{1}")
+    BeamSecTag = int(f"{buildingID}{2}")
+    ### TRANSFORMATION TAGS ###
+    ColSecTransf = int(f"{buildingID}{1}")
+    BeamSecTransf = int(f"{buildingID}{2}")
+
+    
     #### MATERIAL PROPERTIES ####
     Fy = 60.0*ksi
     Es = 29000*ksi		# Steel Young's Modulus
@@ -272,7 +291,7 @@ def getSteelFiberSection(plotSection = False):
     Gs = Es/(2.*(1+nu)) # Torsional stiffness Modulus
     Hiso = 0
     Hkin = 1000
-    matIDhard = 1
+    matIDhard = int(f"{buildingID}1")  # material id followed by building id
     # uniaxialMaterial('Hardening', matTag, E, sigmaY, H_iso, H_kin, eta=0.0)
     ops.uniaxialMaterial('Hardening', matIDhard, Es, Fy, Hiso, Hkin)
 
@@ -305,4 +324,11 @@ def getSteelFiberSection(plotSection = False):
     ops.geomTransf(ColSecTransfType, ColSecTransf)
     ops.geomTransf('Linear', BeamSecTransf)
 
-getModel(NBay=2, NStory=5, LBeam=4, LCol=3, sectionType='SteelFiber', startCoor=(0,0))
+
+ops.wipe()
+ops.model('BasicBuilder', '-ndm', 2, '-ndf', 3)
+getModel(buildingID=10, NBay=1, NStory=7, LBeam=3, LCol=3, sectionType='RCFiber', startCoor=(0,0))
+getModel(buildingID=20, NBay=1, NStory=3, LBeam=4, LCol=3, sectionType='SteelFiber', startCoor=(4,0))
+getModel(buildingID=30, NBay=1, NStory=5, LBeam=5, LCol=3, sectionType='SteelFiber', startCoor=(9,0))
+ovs.plot_model()
+plt.show()

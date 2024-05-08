@@ -2,13 +2,9 @@
 # opensees packages
 import openseespy.opensees as ops
 import opsvis as ovs
-import opstool as otl
 #other packages
-import numpy as np
 import matplotlib.pyplot as plt
 
-# user def modules
-from modelUnits import *
 
 
 def BuildRCrectSection(id, HSec, BSec, coverH, coverB, coreID, coverID, steelID, 
