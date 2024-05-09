@@ -20,6 +20,14 @@ import buildFiberSection
 ColSecTag = 1
 BeamSecTag = 2
 
+
+# Section Geometry:
+HCol = 24*inch	# square-Column width
+BCol = HCol
+HBeam = 42*inch	# Beam depth -- perpendicular to bending axis
+BBeam = 24*inch	# Beam width -- parallel to bending axis
+
+
 # Additional tags for Inelastic Beam Column Section
 ColMatTagAxial = 101                              # Represent column axial behaviour
 ColMatTagFlex = 102                               # Represent column flexural behaviour
@@ -46,6 +54,10 @@ def getModel(buildingID, NBay, NStory, LBeam, LCol, sectionType = 'Elastic', sta
     startCoor = Coordinate of bottom left node of building default (0,0)
     
     """
+
+    ### GLOBAL VARIALBLES ###
+    global HCol, BCol, HBeam, BBeam
+
     #ops.wipe()
 
     #ops.model('BasicBuilder', '-ndm', 2, '-ndf', 3)
@@ -71,19 +83,76 @@ def getModel(buildingID, NBay, NStory, LBeam, LCol, sectionType = 'Elastic', sta
     IDctrlDOF =  1	                    # DoF of displacement read for displacement control
     LBuilding =  NStory*LCol	        # total building height
 
-    # building up the elements
+
+
+    # Define Section and weight of section per unit length of element
+    # beam and column section weight for all materials except rc concrete
+    QBeam = 94*lbf/ft		            # W-section weight per length
+    QdlCol = 114*lbf/ft	                # W-section weight per length
+
     if sectionType == 'Elastic':
         getElasticSection()
+
     elif sectionType == 'InElastic':
         getInelasticSection()
+
     elif sectionType == 'RCFiber':
         getRCFiberSection(buildingID)
+        QBeam = GammaConcrete*HBeam*BBeam	# self weight of Beam, weight per length
+        QdlCol = GammaConcrete*HCol*BCol	# self weight of Column, weight per length
+        
     elif sectionType == 'SteelFiber':
         getSteelFiberSection(buildingID)
 
+
+    #### GRAVITY LOADS, MASSES AND WEIGHT ###
+    GammaConcrete = 150*pcf   		    # Reinforced-Concrete floor slabs
+    Tslab = 6*inch			            # 6-inch slab
+    Lslab = 2*LBeam/2 			        # assume slab extends a distance of LBeam1/2 in/out of plane
+    Qslab = GammaConcrete*Tslab*Lslab   # slab dead weight 
+    QdlBeam = Qslab + QBeam 	        # dead load distributed along beam.
+    WeightCol = QdlCol*LCol  		    # total single Column weight
+    WeightBeam = QdlBeam*LBeam 	        # total single Beam weight
+
+    ### Assigning masses to node and calculating building weight ###
+    iFloorWeight = []                   # to store weight of each floor
+    WeightTotal = 0.0
+    sumWiHi = 0.0                       # sum of storey weight and its height for lateral load distribution
+    ## uppermost node has weight from beam in the storey and 1/2column connecting it only
+    ## outermost nodes has weight from half beam connecting it only
+    for j in range(1, NStory + 1):
+        FloorWeight = 0.0
+
+        if (j+1) == (NStory + 1):      # Uppermost storey
+            ColWeightFact = 1          # load shared from only one column
+        if (j+1) < (NStory +1 ):
+            ColWeightFact = 2          # load shared from 2 columns connecting it
+
+        for i in range(NBay + 1):
+            if (i+1) == 1 or (i+1) == (NBay+1):   # Outermost nodes 
+                BeamWeightFact = 1                # Load shared from one beam only
+            else:
+                BeamWeightFact = 2
+
+            nodeTag = int(f"{buildingID}{j+1}{i+1}") #example: nodeTag 10011 means 1st building(100) 1st node of ground floor (1st floor) 
+            nodeCoor = ops.nodeCoord(nodeTag)
+            
+            WeightNode = ColWeightFact * WeightCol/2 + BeamWeightFact * WeightBeam/2
+            MassNode = WeightNode / g
+            ops.mass(nodeTag, *[MassNode, 0, 0])
+
+            FloorWeight += WeightNode                 # FloorWeight =  Sum of all weights concn in nodes
+
+            print(nodeTag, nodeCoor, MassNode)
+
+        iFloorWeight.append(FloorWeight)
+        WeightTotal += FloorWeight
+        sumWiHi += FloorWeight * j * LCol
+        
+    MassTotal = WeightTotal / g                      # Total Building Mass
+
     for nod in iSupportNode:
         print(ops.nodeCoord(nod))
-
     
     # Building the Beam and Column Elements
     numItgrPts = 5
@@ -111,8 +180,27 @@ def getModel(buildingID, NBay, NStory, LBeam, LCol, sectionType = 'Elastic', sta
             print(eleBeamTag, inodeTag, jnodeTag, ops.nodeCoord(inodeTag), ops.nodeCoord(jnodeTag))
 
             ops.element('nonlinearBeamColumn', eleBeamTag, *[inodeTag, jnodeTag], numItgrPts, BeamSecTag, BeamSecTransf)
+    
+    #### GRAVITY LOADS, MASSES AND WEIGHT ###
+    GammaConcrete = 150*pcf   		# Reinforced-Concrete floor slabs
+    Tslab = 6*inch			# 6-inch slab
+    Lslab = 2*LBeam/2 			# assume slab extends a distance of LBeam1/2 in/out of plane
+    Qslab = GammaConcrete*Tslab*Lslab 
+    Qslab
+    QdlCol = GammaConcrete*HCol*BCol	# self weight of Column, weight per length
+    QBeam = GammaConcrete*HBeam*BBeam	# self weight of Beam, weight per length
+    QdlBeam = Qslab + QBeam 	# dead load distributed along beam.
+    WeightCol = QdlCol*LCol  		# total Column weight
+    WeightBeam = QdlBeam*LBeam 	# total Beam weight
 
-
+    Qslab = GammaConcrete*Tslab*Lslab
+    QdlCol = GammaConcrete*HCol*BCol 
+    QBeam = 94*lbf/ft		            # W-section weight per length
+    QdlBeam = Qslab + QBeam	            # dead load distributed along beam.
+    QdlCol = 114*lbf/ft	                # W-section weight per length
+    WeightCol = QdlCol*LCol     		# total Column weight
+    WeightBeam = QdlBeam*LBeam      	# total Beam weight
+                
 def getElasticSection():
     # section geometry
     # column sections: W27x114
@@ -230,14 +318,7 @@ def getRCFiberSection(buildingID, plotSection = False):
     IDSteel = int(f"{buildingID}{3}") # material id followed by building id
     ops.uniaxialMaterial('Steel02', IDSteel, Fy, Es, Bs, R0, cR1, cR2)
 
-
-    ### FIBER SECTION PARAMETERS ###
-    # Section Geometry:
-    HCol = 24*inch	# square-Column width
-    BCol = HCol
-    HBeam = 42*inch	# Beam depth -- perpendicular to bending axis
-    BBeam = 24*inch	# Beam width -- parallel to bending axis
-
+    ### RC FIBER SECTION PARAMETERS ###
     # Column section geometry:
     cover = 2.5*inch	            # rectangular-RC-Column cover
     numBarsTopCol = 8		        # number of longitudinal-reinforcement bars on top layer
@@ -327,8 +408,11 @@ def getSteelFiberSection(buildingID, plotSection = False):
 
 ops.wipe()
 ops.model('BasicBuilder', '-ndm', 2, '-ndf', 3)
-getModel(buildingID=10, NBay=1, NStory=7, LBeam=3, LCol=3, sectionType='RCFiber', startCoor=(0,0))
-getModel(buildingID=20, NBay=1, NStory=3, LBeam=4, LCol=3, sectionType='SteelFiber', startCoor=(4,0))
-getModel(buildingID=30, NBay=1, NStory=5, LBeam=5, LCol=3, sectionType='SteelFiber', startCoor=(9,0))
-ovs.plot_model()
-plt.show()
+#getModel(buildingID=10, NBay=1, NStory=7, LBeam=3, LCol=3, sectionType='RCFiber', startCoor=(0,0))
+#getModel(buildingID=20, NBay=1, NStory=3, LBeam=4, LCol=3, sectionType='SteelFiber', startCoor=(4,0))
+#getModel(buildingID=30, NBay=1, NStory=5, LBeam=5, LCol=3, sectionType='SteelFiber', startCoor=(9,0))
+#getModel(buildingID=40, NBay=1, NStory=7, LBeam=3, LCol=3, sectionType='RCFiber', startCoor=(14,0))
+#getModel(buildingID=50, NBay=1, NStory=3, LBeam=4, LCol=3, sectionType='SteelFiber', startCoor=(18,0))
+#getModel(buildingID=60, NBay=1, NStory=5, LBeam=5, LCol=3, sectionType='SteelFiber', startCoor=(24,0))
+#ovs.plot_model()
+#plt.show()
