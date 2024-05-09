@@ -90,6 +90,7 @@ def getModel(buildingID, NBay, NStory, LBeam, LCol, sectionType = 'Elastic', sta
     QBeam = 94*lbf/ft		            # W-section weight per length
     QdlCol = 114*lbf/ft	                # W-section weight per length
 
+    GammaConcrete = 150*pcf   		    # Reinforced-Concrete floor slabs
     if sectionType == 'Elastic':
         getElasticSection()
 
@@ -106,7 +107,6 @@ def getModel(buildingID, NBay, NStory, LBeam, LCol, sectionType = 'Elastic', sta
 
 
     #### GRAVITY LOADS, MASSES AND WEIGHT ###
-    GammaConcrete = 150*pcf   		    # Reinforced-Concrete floor slabs
     Tslab = 6*inch			            # 6-inch slab
     Lslab = 2*LBeam/2 			        # assume slab extends a distance of LBeam1/2 in/out of plane
     Qslab = GammaConcrete*Tslab*Lslab   # slab dead weight 
@@ -182,24 +182,24 @@ def getModel(buildingID, NBay, NStory, LBeam, LCol, sectionType = 'Elastic', sta
             ops.element('nonlinearBeamColumn', eleBeamTag, *[inodeTag, jnodeTag], numItgrPts, BeamSecTag, BeamSecTransf)
     
     #### GRAVITY LOADS, MASSES AND WEIGHT ###
-    GammaConcrete = 150*pcf   		# Reinforced-Concrete floor slabs
-    Tslab = 6*inch			# 6-inch slab
-    Lslab = 2*LBeam/2 			# assume slab extends a distance of LBeam1/2 in/out of plane
-    Qslab = GammaConcrete*Tslab*Lslab 
-    Qslab
-    QdlCol = GammaConcrete*HCol*BCol	# self weight of Column, weight per length
-    QBeam = GammaConcrete*HBeam*BBeam	# self weight of Beam, weight per length
-    QdlBeam = Qslab + QBeam 	# dead load distributed along beam.
-    WeightCol = QdlCol*LCol  		# total Column weight
-    WeightBeam = QdlBeam*LBeam 	# total Beam weight
+    #GammaConcrete = 150*pcf   		# Reinforced-Concrete floor slabs
+    #Tslab = 6*inch			# 6-inch slab
+    #Lslab = 2*LBeam/2 			# assume slab extends a distance of LBeam1/2 in/out of plane
+    #Qslab = GammaConcrete*Tslab*Lslab 
+    #Qslab
+    #QdlCol = GammaConcrete*HCol*BCol	# self weight of Column, weight per length
+    #QBeam = GammaConcrete*HBeam*BBeam	# self weight of Beam, weight per length
+    #QdlBeam = Qslab + QBeam 	# dead load distributed along beam.
+    #WeightCol = QdlCol*LCol  		# total Column weight
+    #WeightBeam = QdlBeam*LBeam 	# total Beam weight
 
-    Qslab = GammaConcrete*Tslab*Lslab
-    QdlCol = GammaConcrete*HCol*BCol 
-    QBeam = 94*lbf/ft		            # W-section weight per length
-    QdlBeam = Qslab + QBeam	            # dead load distributed along beam.
-    QdlCol = 114*lbf/ft	                # W-section weight per length
-    WeightCol = QdlCol*LCol     		# total Column weight
-    WeightBeam = QdlBeam*LBeam      	# total Beam weight
+    #Qslab = GammaConcrete*Tslab*Lslab
+    #QdlCol = GammaConcrete*HCol*BCol 
+    #QBeam = 94*lbf/ft		            # W-section weight per length
+    #QdlBeam = Qslab + QBeam	            # dead load distributed along beam.
+    #QdlCol = 114*lbf/ft	                # W-section weight per length
+    #WeightCol = QdlCol*LCol     		# total Column weight
+    #WeightBeam = QdlBeam*LBeam      	# total Beam weight
                 
 def getElasticSection():
     # section geometry
@@ -408,11 +408,10 @@ def getSteelFiberSection(buildingID, plotSection = False):
 
 ops.wipe()
 ops.model('BasicBuilder', '-ndm', 2, '-ndf', 3)
-#getModel(buildingID=10, NBay=1, NStory=7, LBeam=3, LCol=3, sectionType='RCFiber', startCoor=(0,0))
-#getModel(buildingID=20, NBay=1, NStory=3, LBeam=4, LCol=3, sectionType='SteelFiber', startCoor=(4,0))
-#getModel(buildingID=30, NBay=1, NStory=5, LBeam=5, LCol=3, sectionType='SteelFiber', startCoor=(9,0))
+getModel(buildingID=10, NBay=1, NStory=4, LBeam=4, LCol=4, sectionType='RCFiber', startCoor=(0,0))
+getModel(buildingID=20, NBay=1, NStory=3, LBeam=4, LCol=3, sectionType='SteelFiber', startCoor=(5,0))
+getModel(buildingID=30, NBay=1, NStory=5, LBeam=5, LCol=3, sectionType='SteelFiber', startCoor=(10,0))
 #getModel(buildingID=40, NBay=1, NStory=7, LBeam=3, LCol=3, sectionType='RCFiber', startCoor=(14,0))
 #getModel(buildingID=50, NBay=1, NStory=3, LBeam=4, LCol=3, sectionType='SteelFiber', startCoor=(18,0))
-#getModel(buildingID=60, NBay=1, NStory=5, LBeam=5, LCol=3, sectionType='SteelFiber', startCoor=(24,0))
-#ovs.plot_model()
-#plt.show()
+ovs.plot_model()
+plt.show()
