@@ -23,8 +23,8 @@ ops.fix(1, 1)
 viscousID = 2
 C = 683 * kN*sec/m
 alpha = 1
-ops.uniaxialMaterial('Viscous', viscousID, C, alpha)
-
+#ops.uniaxialMaterial('Viscous', viscousID, C, alpha)
+ops.uniaxialMaterial('ViscousDamper', viscousID, 300, 280.3, 0.30)
 
 #element('zeroLength', eleTag, *eleNodes, '-mat', *matTags, '-dir', *dirs)
 ops.element('zeroLength', 1, *[1, 2], '-mat', viscousID, '-dir', *[1])
@@ -52,7 +52,7 @@ ops.constraints('Plain')
 ops.numberer('RCM')
 ops.test('NormDispIncr', 1.0e-6, 6, 0)
 ops.algorithm('Newton')
-ops.system('ProfileSPD')
+ops.system('BandGeneral')
 ops.integrator('LoadControl', 1)
 #ops.integrator('DisplacementControl', 2, 1, 0.026738)
 ops.analysis('Static')
@@ -72,8 +72,7 @@ for i in range(0, 400):
     #print(ops.getTime(), ops.nodeReaction(1), ops.nodeReaction(2))
 
 
-# disp = np.loadtxt("Pounding Models/viscousDisplacement.txt")
-# rxn = np.loadtxt("Pounding Models/viscousReactions.txt")
-# plt.plot(disp[:, 1], -rxn[:, 1])
-# plt.show()
-
+#disp = np.loadtxt("Pounding Models/viscousDisplacement.txt")
+#rxn = np.loadtxt("Pounding Models/viscousReactions.txt")
+#plt.plot(disp[:, 1], -rxn[:, 1])
+#plt.show()
