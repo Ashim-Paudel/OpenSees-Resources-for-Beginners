@@ -35,13 +35,13 @@ ops.fix(1, 1)
 # viscous material
 viscousID = 2
 C = 683 * kN*sec/m
-alpha = .7
+alpha = .5
 ops.uniaxialMaterial('Viscous', viscousID, C, alpha)
 
 # spring materil
 springID = 3
 Fy = 250 * Mpa
-E0 = 93500 * kN/m**2
+E0 = 93500*100* kN/m**2
 b = 0.1
 ops.uniaxialMaterial('Steel01', springID, Fy, E0, b)
 
@@ -53,13 +53,13 @@ ops.uniaxialMaterial('ElasticPPGap', eppGAPMatID, -1*E, -1*Fy, -1*gap, 0.1)
 
 
 ### kelvin voigt construction
-parallelTag = 100
-ops.uniaxialMaterial('Parallel', parallelTag, *[viscousID, springID])
+seriesTag = 100
+ops.uniaxialMaterial('Series', seriesTag, *[viscousID, springID])
 
 
 
 #element('zeroLength', eleTag, *eleNodes, '-mat', *matTags, '-dir', *dirs)
-ops.element('zeroLength', 1, *[1, 2], '-mat', parallelTag, '-dir', *[1])
+ops.element('zeroLength', 1, *[1, 2], '-mat', seriesTag, '-dir', *[1])
 #ops.element('twoNodeLink', 2, *[2,3], '-mat', eppGAPMatID, '-dir', *[1])
 #ops.element('zeroLength', 3, *[2,4], '-mat', springID, '-dir', *[1, 2, 6])
 
@@ -78,8 +78,8 @@ eqLoad = 2
 # ops.pattern('UniformExcitation', eqLoad, 1, '-accel', eqLoad)
 # recorders
 
-ops.recorder('Node', '-file', 'kelvin_voigt_Disp.txt', '-time', '-closeOnWrite','-node',2 , '-dof', 1, 'disp')
-ops.recorder('Node', '-file', 'kelvin_voigt_Reactions.txt', '-time', '-closeOnWrite','-node',1 , '-dof', 1, 'reaction')
+ops.recorder('Node', '-file', 'maxwellModel_Disp.txt', '-time', '-closeOnWrite','-node',2 , '-dof', 1, 'disp')
+ops.recorder('Node', '-file', 'maxwellModel_Reactions.txt', '-time', '-closeOnWrite','-node',1 , '-dof', 1, 'reaction')
 
 # analysis
 
@@ -106,8 +106,8 @@ for i in range(Nsteps):
 
 
 
-disp = np.loadtxt("kelvin_voigt_Disp.txt")
-rxn = np.loadtxt("kelvin_voigt_Reactions.txt")
+disp = np.loadtxt("maxwellModel_Disp.txt")
+rxn = np.loadtxt("maxwellModel_Reactions.txt")
 plt.plot(disp[:, 1], -rxn[:, 1])
 plt.show()
 

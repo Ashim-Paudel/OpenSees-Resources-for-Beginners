@@ -17,7 +17,7 @@ ops.model("BasicBuilder", '-ndm', 1, '-ndf', 1)
 
 gap = 2*cm
 ops.node(1, *[0])
-ops.node(2, *[0])
+ops.node(2, *[gap])
 
 ops.fix(1, 1)
 
@@ -34,50 +34,38 @@ ops.uniaxialMaterial('ElasticPPGap', eppGAPMatID, E, Fy, gap, eta)
 ops.element('twoNodeLink', 1, *[1, 2], '-mat', eppGAPMatID, '-dir', *[1])
 
 
-# load assignment
-linTS = 1
-ops.timeSeries('Linear', linTS)
-ops.pattern('Plain', 1, linTS)
+# sine series
+sineWave = 1
+#timeSeries('Trig', tag, tStart, tEnd, period, '-factor', factor=1.0, '-shift', shift=0.0, '-zeroShift', zeroShift=0.0)
+ops.timeSeries('Trig', sineWave, 0, 40, 4, '-factor', 1.0) #apply sine series for 40s
+ops.pattern('UniformExcitation', sineWave, 1, '-accel', 1)
 
-#0.000106952 displacement occurs for 10000 N load
-px = 1*kN
-ops.load(2, *[-1*px])
-#ops.sp(2, 1, 0.000106952)
+# ground motion
+eqLoad = 2
+# ops.timeSeries('Path', eqLoad, '-dt', 0.01, '-filePath', "TakY.th", '-factor', g)
+# ops.pattern('UniformExcitation', eqLoad, 1, '-accel', eqLoad)
+
 
 # recorders
-ops.recorder('Node', '-file', 'Pounding Models/eppDisp.txt', '-time', '-closeOnWrite','-node',2 , '-dof', 1, 'disp')
-ops.recorder('Node', '-file', 'Pounding Models/eppReactions.txt', '-time', '-closeOnWrite','-node',1 , '-dof', 1, 'reaction')
-ops.record()
+ops.recorder('Node', '-file', 'eppDisplacement.txt', '-time', '-closeOnWrite','-node',2 , '-dof', 1, 'disp')
+ops.recorder('Node', '-file', 'eppcousReactions.txt', '-time', '-closeOnWrite','-node',1 , '-dof', 1, 'reaction')
 
 # analysis
 
 
-ops.constraints('Plain')
+ops.constraints('Transformation')
 ops.numberer('RCM')
-ops.test('NormDispIncr', 1.0e-6, 6, 0)
-ops.algorithm('Newton')
-ops.system('BandGeneral')  #system profileSPD can't solve for negative strain hardening ratio
-ops.integrator('LoadControl', .1)  #load control can't push our model beyond yield point for negative strain hardening
-#ops.integrator('DisplacementControl', 2, 1, 0.01)
-ops.analysis('Static')
+ops.test('EnergyIncr', 1.0e-10, 100)
+ops.algorithm('ModifiedNewton')
+ops.system('UmfPack')
+ops.integrator('Newmark', .5, .25)
+#ops.integrator('DisplacementControl', 2, 1, 0.001)
+ops.analysis('Transient')
+ops.analyze(4000, 0.01)
+# run analysis up to 4000 step, with time step = 0.01s, so total time = 40s
 
-for i in range(0, 10):
-    status = ops.analyze(1)
-    
-    if status != 0:
-        print("Trying other analysis params.")
-        ops.algorithm('ModifiedNewton')
-        ops.test('NormDispIncr', 1.0e-3, 10, 0)
-        status = ops.analyze(1)
-    
-    if status != 0:
-        print("Breaking analysis")
-        break
-    #print(ops.getTime(), ops.nodeReaction(1), ops.nodeReaction(2))
-
-
-disp = np.loadtxt("Pounding Models/eppDisp.txt")
-rxn = np.loadtxt("Pounding Models/eppReactions.txt")
-plt.plot(disp[:, 1], -rxn[:, 1], '.')
+disp = np.loadtxt("eppDisplacement.txt")
+rxn = np.loadtxt("eppReactions.txt")
+plt.plot(disp[:, 1], -rxn[:, 1])
 plt.show()
 
