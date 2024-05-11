@@ -19,7 +19,6 @@ ops.node(3, 120, 0.0)
 ops.fix(1, 1, 1, 1)
 ops.fix(3, 1, 1, 1)
 
-
 spring_orientation = 0
 
 # ndR ndC dofs
@@ -27,7 +26,6 @@ if spring_orientation == 0:
     ops.equalDOF(1, 2, *[1, 3])
 elif spring_orientation == 45:
     ops.equalDOF(1, 2, *[3])
-
 
 # Define force-deformation relationship for spring
 ops.uniaxialMaterial('ElasticPP', 2, 1050, 0.02)
@@ -41,7 +39,6 @@ if spring_orientation == 0:
 elif spring_orientation == 45:
     ops.element('zeroLength', 1, *[1, 2], '-mat', 1, '-dir', 1, '-orient', 1, 1, 0, -1, 1, 0)
 #
-
 
 # Geometric transformation
 ops.geomTransf('Linear', 1)
@@ -61,15 +58,18 @@ ops.numberer('Plain')
 ops.constraints('Transformation', 1.0)
 ops.system('SparseGeneral', '-piv')
 ops.integrator('LoadControl', 1)
-ops.test('EnergyIncr', 1e-06, 10, 1)
+ops.test('EnergyIncr', 1e-06, 10, 0)
 ops.algorithm('Newton')
 ops.analysis('Static')
 
+
+NSteps = 10
 with open("translationalSpring_appliedForce.txt", 'w') as file:
-    for i in range(10):
+    for i in range(NSteps):
         ops.analyze(1)
         #print(ops.nodeUnbalance(2))
         file.write(str(ops.nodeUnbalance(2)[1])+'\n')
+        print(f"{i+1}/{NSteps}")
 
 disp22 = np.loadtxt('translationalSpring_disp.out')[:, 1]
 rxn12 = np.loadtxt('translationalSpring_reaction.out')[:, 2]

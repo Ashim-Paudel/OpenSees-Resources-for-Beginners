@@ -19,15 +19,16 @@ ops.node(2, *[0])
 
 ops.fix(1, 1)
 
-# viscous material
-viscousID = 2
-C = 683 * kN*sec/m
-alpha = 1
-#ops.uniaxialMaterial('Viscous', viscousID, C, alpha)
-ops.uniaxialMaterial('ViscousDamper', viscousID, 300, 280.3, 0.30)
+# spring materil
+springID = 3
+Fy = 250*Mpa
+E0 = 93500 * kN/m**2
+b = 0.1
+ops.uniaxialMaterial('Steel01', springID, Fy, E0, b)
+
 
 #element('zeroLength', eleTag, *eleNodes, '-mat', *matTags, '-dir', *dirs)
-ops.element('zeroLength', 1, *[1, 2], '-mat', viscousID, '-dir', *[1])
+ops.element('zeroLength', 1, *[1, 2], '-mat', springID, '-dir', *[1])
 
 
 # load assignment
@@ -41,8 +42,8 @@ ops.load(2, *[px])
 #ops.sp(2, 1, 0.000106952)
 
 # recorders
-ops.recorder('Node', '-file', 'Pounding Models/viscousDisplacement.txt', '-time', '-closeOnWrite','-node',2 , '-dof', 1, 'disp')
-ops.recorder('Node', '-file', 'Pounding Models/viscousReactions.txt', '-time', '-closeOnWrite','-node',1 , '-dof', 1, 'reaction')
+ops.recorder('Node', '-file', 'linear_springDisp.txt', '-time', '-closeOnWrite','-node',2 , '-dof', 1, 'disp')
+ops.recorder('Node', '-file', 'linear_springReactions.txt', '-time', '-closeOnWrite','-node',1 , '-dof', 1, 'reaction')
 ops.record()
 
 # analysis
@@ -52,12 +53,12 @@ ops.constraints('Plain')
 ops.numberer('RCM')
 ops.test('NormDispIncr', 1.0e-6, 6, 0)
 ops.algorithm('Newton')
-ops.system('BandGeneral')
-ops.integrator('LoadControl', 1)
-#ops.integrator('DisplacementControl', 2, 1, 0.026738)
+ops.system('BandGeneral')  #system profileSPD can't solve for negative strain hardening ratio
+#ops.integrator('LoadControl', 1)  #load control can't push our model beyond yield point for negative strain hardening
+ops.integrator('DisplacementControl', 2, 1, 0.01)
 ops.analysis('Static')
 
-for i in range(0, 400):
+for i in range(0, 500):
     status = ops.analyze(1)
     
     if status != 0:
@@ -72,7 +73,8 @@ for i in range(0, 400):
     #print(ops.getTime(), ops.nodeReaction(1), ops.nodeReaction(2))
 
 
-#disp = np.loadtxt("Pounding Models/viscousDisplacement.txt")
-#rxn = np.loadtxt("Pounding Models/viscousReactions.txt")
-#plt.plot(disp[:, 1], -rxn[:, 1])
-#plt.show()
+disp = np.loadtxt("linear_springDisp.txt")
+rxn = np.loadtxt("linear_springReactions.txt")
+plt.plot(disp[:, 1], -rxn[:, 1])
+plt.show()
+
