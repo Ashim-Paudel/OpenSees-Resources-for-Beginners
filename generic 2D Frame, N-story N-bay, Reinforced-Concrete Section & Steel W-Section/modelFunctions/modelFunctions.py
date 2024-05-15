@@ -39,6 +39,7 @@ ColSecTransf = 1
 BeamSecTransf = 2
 ColSecTransfType = 'Linear'
 
+
 # model building function
 def getModel(buildingID, NBay, NStory, LBeam, LCol, sectionType = 'Elastic', startCoor = (0.0 ,0.0)):
     """
@@ -59,17 +60,28 @@ def getModel(buildingID, NBay, NStory, LBeam, LCol, sectionType = 'Elastic', sta
     global HCol, BCol, HBeam, BBeam
 
     #ops.wipe()
-
     #ops.model('BasicBuilder', '-ndm', 2, '-ndf', 3)
+
+    #we will create list to store all the extreme left and right nodes of two buildings
+    LNodes = []
+    RNodes = []
 
     for j in range(NStory + 1):
         for i in range(NBay + 1):
             # nodeTag = j * (NBay+1) + i + 1 # conventional node tag
             nodeTag = int(f"{buildingID}{j+1}{i+1}") #example: nodeTag 10011 means 1st building(100) 1st node of ground floor (1st floor) 
             nodeCoor = (startCoor[0] + i * LBeam, startCoor[1] + j * LCol)
-            
+            if i == 0:
+                LNodes.append(nodeTag)
+
+            if (i+1 == NBay+1):
+                RNodes.append(nodeTag)
+
             print(nodeTag, *nodeCoor)
             ops.node(nodeTag, *(nodeCoor))
+
+    exec(f"LNodes{buildingID} = {LNodes}", globals())
+    exec(f"RNodes{buildingID} = {RNodes}", globals())
 
     # fixity to the nodes
     ops.fixY(0.0, 1, 1, 1)
@@ -86,11 +98,11 @@ def getModel(buildingID, NBay, NStory, LBeam, LCol, sectionType = 'Elastic', sta
 
 
     # Define Section and weight of section per unit length of element
+    GammaConcrete = 150*pcf   		    # Reinforced-Concrete floor slabs
     # beam and column section weight for all materials except rc concrete
     QBeam = 94*lbf/ft		            # W-section weight per length
     QdlCol = 114*lbf/ft	                # W-section weight per length
-
-    GammaConcrete = 150*pcf   		    # Reinforced-Concrete floor slabs
+    
     if sectionType == 'Elastic':
         getElasticSection()
 
@@ -200,7 +212,47 @@ def getModel(buildingID, NBay, NStory, LBeam, LCol, sectionType = 'Elastic', sta
     #QdlCol = 114*lbf/ft	                # W-section weight per length
     #WeightCol = QdlCol*LCol     		# total Column weight
     #WeightBeam = QdlBeam*LBeam      	# total Beam weight
-                
+
+    # define GRAVITY -------------------------------------------------------------
+    # GRAVITY LOADS # define gravity load applied to beams and columns -- eleLoad applies loads in local coordinate axis
+    linearTS = int(f"{buildingID}{1}")
+    ops.timeSeries('Linear', linearTS)
+    ops.pattern('Plain', int(f"{buildingID}{100}"), linearTS)
+
+    # Column elements
+    for j in range(NStory):
+        for i in range(NBay + 1):
+            # nodeTag = j * (NBay+1) + i + 1    # conventional node tag
+            eleColTag = int(f"{buildingID}{colNameId}{j+1}{i+1}") #example: nodeTag 11 means 1st node of ground floor (1st floor)
+            ops.eleLoad('-ele', eleColTag, '-type', '-beamUniform', 0, -QdlCol)
+
+    # Beam elements
+    for j in range(1, NStory + 1): #because we dont have beam at ground level
+        for i in range(NBay):
+            # nodeTag = j * (NBay+1) + i + 1 # conventional node tag
+            eleBeamTag = int(f"{buildingID}{beamNameId}{j+1}{i+1}") #example: nodeTag 11 means 1st node of ground floor (1st floor)
+            ops.eleLoad('-ele', eleBeamTag, '-type', '-beamUniform', -QdlBeam)    
+
+def runGravityAnalysis(NStepGravity):
+    Tol = 1.0e-8
+    DGravity = 1/NStepGravity
+
+    ops.constraints('Plain')
+    ops.numberer('RCM')
+    ops.system('BandGeneral')
+    ops.test('NormDispIncr', Tol, 6)
+    ops.algorithm('Newton')
+    ops.integrator('LoadControl', DGravity)
+    ops.analysis('Static')
+
+    status = ops.analyze(NStepGravity)
+
+    ops.loadConst('-time', 0.)
+
+    return status
+    
+
+
 def getElasticSection():
     # section geometry
     # column sections: W27x114
@@ -406,12 +458,58 @@ def getSteelFiberSection(buildingID, plotSection = False):
     ops.geomTransf('Linear', BeamSecTransf)
 
 
+def kelvinVoigtMaterials(idKelvin, LBuildingRNodes, RBuildingLNodes, gap):
+    # viscous material
+    viscousID = int(f"{idKelvin}{1}")
+    C = 683 * kN*sec/m
+    alpha = 1
+    ops.uniaxialMaterial('Viscous', viscousID, C, alpha)
+
+    # spring materil
+    springID = int(f"{idKelvin}{2}")
+    Fy = 250 * Mpa
+    E0 = 93500 * kN/m**2
+    b = 0.1
+    ops.uniaxialMaterial('Steel01', springID, Fy, E0, b)
+
+    # epp GAP
+    eppGAPMatID = int(f"{idKelvin}{3}")
+    E = 2* E0
+    Fy = 250*Mpa
+    eta = 0.1
+    ops.uniaxialMaterial('ElasticPPGap', eppGAPMatID, 1*E, -1*Fy, -1*gap, eta)
+
+
+    ### kelvin voigt construction
+    parallelTag = int(f"{idKelvin}{4}")
+    ops.uniaxialMaterial('Parallel', parallelTag, *[viscousID, springID])
+
+    seriesTag = int(f"{idKelvin}{5}")
+    ops.uniaxialMaterial('Series', seriesTag, *[parallelTag, eppGAPMatID])
+
+
+    for lNode, rNode in zip(LBuildingRNodes[1::], RBuildingLNodes[1::]):
+        ops.element('twoNodeLink', int(f"{lNode}{rNode}"), *[lNode, rNode], '-mat', parallelTag, '-dir', *[1, 2, 3])
+
+    pass
+
 ops.wipe()
 ops.model('BasicBuilder', '-ndm', 2, '-ndf', 3)
+#LNodes10 = []
+#RNodes10 = []
+
+gap = 20*cm
 getModel(buildingID=10, NBay=1, NStory=4, LBeam=4, LCol=4, sectionType='RCFiber', startCoor=(0,0))
-getModel(buildingID=20, NBay=1, NStory=3, LBeam=4, LCol=3, sectionType='SteelFiber', startCoor=(5,0))
-getModel(buildingID=30, NBay=1, NStory=5, LBeam=5, LCol=3, sectionType='SteelFiber', startCoor=(10,0))
+getModel(buildingID=20, NBay=1, NStory=7, LBeam=4, LCol=4, sectionType='SteelFiber', startCoor=(4+gap,0))
 #getModel(buildingID=40, NBay=1, NStory=7, LBeam=3, LCol=3, sectionType='RCFiber', startCoor=(14,0))
 #getModel(buildingID=50, NBay=1, NStory=3, LBeam=4, LCol=3, sectionType='SteelFiber', startCoor=(18,0))
+
+print(LNodes10, RNodes10)
+print(LNodes20, RNodes20)
+
+for a,b in zip(RNodes10, LNodes20):
+    print(a,b)
+
+kelvinVoigtMaterials(100, RNodes10, LNodes20, gap)
 ovs.plot_model()
 plt.show()
