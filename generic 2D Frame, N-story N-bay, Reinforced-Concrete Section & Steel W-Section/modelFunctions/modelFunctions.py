@@ -458,6 +458,51 @@ def getSteelFiberSection(buildingID, plotSection = False):
     ops.geomTransf('Linear', BeamSecTransf)
 
 
+def runGroundMotionAnalysis(GmFile):
+    ops.loadConst('-time', 0.0)
+
+    DtAnalysis = 0.01 #for analysis
+    TmaxAnalysis = 10 #for analysis
+    Nstep = int(TmaxAnalysis/DtAnalysis)
+    
+    gmData = np.loadtxt(GmFile).ravel()
+    print(gmData)
+    GM_dirn = 1
+    GM_fact = 1.0
+    gmTS = 2
+    dt = 0.01;			# time step for input ground motion
+    ops.timeSeries("Path", gmTS, '-dt', dt, '-values', *gmData, '-fact', GM_fact)
+    #pattern('UniformExcitation', patternTag, dir, '-disp', dispSeriesTag, '-vel', velSeriesTag, '-accel', accelSeriesTag, '-vel0', vel0, '-fact', fact)
+    ops.pattern('UniformExcitation', 300, GM_dirn, '-accel', gmTS)
+
+    
+    ops.constraints("Transformation")
+    ops.numberer("Plain")
+    ops.system("ProfileSPD")
+    tol = 1.e-10
+    maxNumIter = 50
+    ops.test("EnergyIncr", tol, maxNumIter)
+    ops.algorithm("ModifiedNewton")
+    ops.integrator("Newmark", .5, .25)
+    ops.analysis("Transient")
+
+    # define DAMPING--------------------------------------------------------------------------------------
+    # apply Rayleigh DAMPING from $xDamp
+    # D=$alphaM*M + $betaKcurr*Kcurrent + $betaKcomm*KlastCommit + $beatKinit*$Kinitial
+    xDamp= 0.02;				# 2% damping ratio
+    lambda_ =  ops.eigen(1)[0]			# eigenvalue mode 1
+    omega = pow(lambda_,0.5)
+    alphaM =  0.				# M-prop. damping; D = alphaM*M
+    betaKcurr =  0.         			# K-proportional damping;      +beatKcurr*KCurrent
+    betaKcomm =  2.*xDamp/omega  	# K-prop. damping parameter;   +betaKcomm*KlastCommitt
+    betaKinit =  0.		# initial-stiffness proportional damping      +beatKinit*Kini
+    # define damping
+    ops.rayleigh(alphaM, betaKcurr, betaKinit, betaKcomm) # RAYLEIGH damping
+
+    status = ops.analyze(Nstep, DtAnalysis)
+    return status
+
+
 def kelvinVoigtMaterials(idKelvin, LBuildingRNodes, RBuildingLNodes, gap):
     # viscous material
     viscousID = int(f"{idKelvin}{1}")
@@ -487,11 +532,13 @@ def kelvinVoigtMaterials(idKelvin, LBuildingRNodes, RBuildingLNodes, gap):
     seriesTag = int(f"{idKelvin}{5}")
     ops.uniaxialMaterial('Series', seriesTag, *[parallelTag, eppGAPMatID])
 
-
+    kvID = []
     for lNode, rNode in zip(LBuildingRNodes[1::], RBuildingLNodes[1::]):
         ops.element('twoNodeLink', int(f"{lNode}{rNode}"), *[lNode, rNode], '-mat', parallelTag, '-dir', *[1, 2, 3])
+        kvID.append(int(f"{lNode}{rNode}"))
 
-    pass
+    ops.recorder('Element', '-file', 'testForce.txt', '-time', '-closeOnWrite', '-ele', *kvID, 'globalForce')
+
 
 ops.wipe()
 ops.model('BasicBuilder', '-ndm', 2, '-ndf', 3)
@@ -512,4 +559,15 @@ for a,b in zip(RNodes10, LNodes20):
 
 kelvinVoigtMaterials(100, RNodes10, LNodes20, gap)
 ovs.plot_model()
+plt.show()
+
+lomaPrietaEq = "data/A10000.dat"
+casi68Eq = "data/BM68elc.dat"
+
+runGravityAnalysis(100)
+ovs.plot_defo()
+plt.show()
+
+runGroundMotionAnalysis(lomaPrietaEq)
+ovs.plot_defo()
 plt.show()
