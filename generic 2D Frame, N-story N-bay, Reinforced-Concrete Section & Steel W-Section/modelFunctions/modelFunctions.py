@@ -37,7 +37,7 @@ BeamMatTagFlex = 202                              # Represent beam flexural beha
 # Geometric Transformation Tags
 ColSecTransf = 1
 BeamSecTransf = 2
-ColSecTransfType = 'Linear'
+ColSecTransfType = 'PDelta'
 
 
 # model building function
@@ -466,7 +466,7 @@ def runGroundMotionAnalysis(GmFile):
     Nstep = int(TmaxAnalysis/DtAnalysis)
     
     gmData = np.loadtxt(GmFile).ravel()
-    print(gmData)
+
     GM_dirn = 1
     GM_fact = 1.0
     gmTS = 2
@@ -533,11 +533,12 @@ def kelvinVoigtMaterials(idKelvin, LBuildingRNodes, RBuildingLNodes, gap):
     ops.uniaxialMaterial('Series', seriesTag, *[parallelTag, eppGAPMatID])
 
     kvID = []
-    for lNode, rNode in zip(LBuildingRNodes[1::], RBuildingLNodes[1::]):
-        ops.element('twoNodeLink', int(f"{lNode}{rNode}"), *[lNode, rNode], '-mat', parallelTag, '-dir', *[1, 2, 3])
+    for lNode, rNode in zip(LBuildingRNodes, RBuildingLNodes):
+        ops.element('twoNodeLink', int(f"{lNode}{rNode}"), *[lNode, rNode], '-mat', seriesTag, '-dir', *[1, 2, 3])
         kvID.append(int(f"{lNode}{rNode}"))
 
-    ops.recorder('Element', '-file', 'testForce.txt', '-time', '-closeOnWrite', '-ele', *kvID, 'globalForce')
+    ops.recorder('Element', '-file', 'testForce.txt', '-time', '-closeOnWrite', '-ele', *kvID,'-dof',1, 'globalForce')
+
 
 
 ops.wipe()
@@ -550,6 +551,10 @@ getModel(buildingID=10, NBay=1, NStory=4, LBeam=4, LCol=4, sectionType='RCFiber'
 getModel(buildingID=20, NBay=1, NStory=7, LBeam=4, LCol=4, sectionType='SteelFiber', startCoor=(4+gap,0))
 #getModel(buildingID=40, NBay=1, NStory=7, LBeam=3, LCol=3, sectionType='RCFiber', startCoor=(14,0))
 #getModel(buildingID=50, NBay=1, NStory=3, LBeam=4, LCol=3, sectionType='SteelFiber', startCoor=(18,0))
+
+ops.recorder('Node', '-file', "Building10RightNodes_Disp.txt", '-time', '-closeOnWrite', '-node', *RNodes10[:5],'-dof', 1, 'disp')
+ops.recorder('Node', '-file', "Building20LeftNodes_Disp.txt", '-time', '-closeOnWrite', '-node', *LNodes20[:5],'-dof',1, 'disp')
+
 
 print(LNodes10, RNodes10)
 print(LNodes20, RNodes20)
@@ -568,6 +573,6 @@ runGravityAnalysis(100)
 ovs.plot_defo()
 plt.show()
 
-runGroundMotionAnalysis(lomaPrietaEq)
+runGroundMotionAnalysis(casi68Eq)
 ovs.plot_defo()
 plt.show()
