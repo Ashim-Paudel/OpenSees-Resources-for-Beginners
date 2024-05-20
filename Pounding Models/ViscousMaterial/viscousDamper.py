@@ -17,7 +17,7 @@ ops.model("BasicBuilder", '-ndm', 1, '-ndf', 1)
 
 gap = 2*cm
 ops.node(1, *[0])
-ops.node(2, *[0])
+ops.node(2, *[1])
 
 ops.mass(2, 100) # 100 kg mass
 
@@ -34,20 +34,51 @@ alpha = np.array((0.3, 0.6, 0.01, 1.50))
 #    #ops.uniaxialMaterial('Viscous', viscousID, C, alpha)
 #    ops.uniaxialMaterial('ViscousDamper', idamperID, kD, icD*kN*pow((mm/sec), ialpha), ialpha)
 
-ops.uniaxialMaterial('ViscousDamper', 1, kD, cD[2] , alpha[2])
+ops.uniaxialMaterial('ViscousDamper', 1, kD, cD[1] , alpha[1])
 
 #element('zeroLength', eleTag, *eleNodes, '-mat', *matTags, '-dir', *dirs)
-#element('twoNodeLink', eleTag, *eleNodes, '-mat', *matTags, '-dir', *dir
-ops.element('zeroLength', 1, *[1, 2], '-mat', 1, '-dir', *[1])
+ops.element('twoNodeLink', 1, *[1,2], '-mat', 1, '-dir', *[1])
+#ops.element('zeroLength', 1, *[1, 2], '-mat', 1, '-dir', *[1])
 
+
+TMaxAnalysis = 6 *sec
+dtAnalysis = 0.01*sec
+NSteps = int(TMaxAnalysis/dtAnalysis)
+freq = 0.5
+amplitudes = [12.0, 24.0, 36.0]
 # sine series
 sineWave = 1
 #timeSeries('Trig', tag, tStart, tEnd, period, '-factor', factor=1.0, '-shift', shift=0.0, '-zeroShift', zeroShift=0.0)
-ops.timeSeries('Trig', sineWave, 0, 10 , 2, '-factor', 40.0) #apply sine series for 40s
-ops.pattern('UniformExcitation', sineWave, 1, '-accel', sineWave)
+#ops.timeSeries('Trig', sineWave, 0, 10 , 2, '-factor', 40.0) #apply sine series for 40s
+#ops.pattern('UniformExcitation', sineWave, 1, '-accel', sineWave)
+
+# incremental sine wave
+sineSeries = np.zeros_like(list(range(NSteps)), dtype=float)
+
+
+t = 0
+for i in range(NSteps):
+    amp = amplitudes[0]
+    if (i+1) >= NSteps/3:
+        amp = amplitudes[1]
+    if (i+1) >= 2*NSteps/3:
+        amp = amplitudes[2]
+
+    t += dtAnalysis
+    sineSeries[i] = amp * np.sin(2*np.pi*freq*t)
+    #print(sineSeries[i])
+
+plt.plot(np.arange(0, TMaxAnalysis, dtAnalysis), sineSeries)
+plt.title("Input Sine Series")
+plt.show()
+# incremental sine series
+incrementalSine = 2
+ops.timeSeries('Path', incrementalSine, '-dt', dtAnalysis, '-values', *sineSeries)
+ops.pattern('UniformExcitation', incrementalSine, 1, '-accel', incrementalSine)
+
 
 # ground motion
-eqLoad = 2
+eqLoad = 3
 # ops.timeSeries('Path', eqLoad, '-dt', 0.01, '-filePath', "TakY.th", '-factor', g)
 # ops.pattern('UniformExcitation', eqLoad, 1, '-accel', eqLoad)
 
@@ -68,8 +99,9 @@ ops.integrator('Newmark', .5, .25)
 #ops.integrator('DisplacementControl', 2, 1, 0.001)
 ops.analysis('Transient')
 
-for i in range(1000):
-    ops.analyze(1, 0.01)
+
+for i in range(NSteps):
+    ops.analyze(1, dtAnalysis)
     print(f"time:{(i+1)*0.01}\tStep:{i+1}")
 # run analysis up to 4000 step, with time step = 0.01s, so total time = 40s
 

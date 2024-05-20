@@ -16,7 +16,7 @@ ops.model("BasicBuilder", '-ndm', 1, '-ndf', 1)
 gap = 2*cm
 ops.node(1, *[0])
 ops.node(2, *[0])
-#ops.node(3, *[gap])
+ops.node(3, *[gap])
 #ops.node(4, *[0, 0])
 
 ops.mass(2, 100)
@@ -35,13 +35,13 @@ ops.fix(1, 1)
 # viscous material
 viscousID = 2
 C = 683 * kN*sec/m
-alpha = 1
+alpha = .7
 ops.uniaxialMaterial('Viscous', viscousID, C, alpha)
 
 # spring materil
 springID = 3
 Fy = 250 * Mpa
-E0 = 93500 * kN/m**2
+E0 = 2
 b = 0.1
 ops.uniaxialMaterial('Steel01', springID, Fy, E0, b)
 
@@ -49,18 +49,17 @@ ops.uniaxialMaterial('Steel01', springID, Fy, E0, b)
 eppGAPMatID = 4
 E = 2* E0
 Fy = 250*Mpa
-ops.uniaxialMaterial('ElasticPPGap', eppGAPMatID, -1*E, -1*Fy, -1*gap, 0.1)
+eta = 0.01
+ops.uniaxialMaterial('ElasticPPGap', eppGAPMatID, E, Fy, gap, eta)
 
 
 ### kelvin voigt construction
 parallelTag = 100
 ops.uniaxialMaterial('Parallel', parallelTag, *[viscousID, springID])
 
-
-
 #element('zeroLength', eleTag, *eleNodes, '-mat', *matTags, '-dir', *dirs)
 ops.element('zeroLength', 1, *[1, 2], '-mat', parallelTag, '-dir', *[1])
-#ops.element('twoNodeLink', 2, *[2,3], '-mat', eppGAPMatID, '-dir', *[1])
+ops.element('twoNodeLink', 2, *[2,3], '-mat', eppGAPMatID, '-dir', *[1])
 #ops.element('zeroLength', 3, *[2,4], '-mat', springID, '-dir', *[1, 2, 6])
 
 # load assignment
@@ -78,8 +77,8 @@ eqLoad = 2
 # ops.pattern('UniformExcitation', eqLoad, 1, '-accel', eqLoad)
 # recorders
 
-ops.recorder('Node', '-file', 'kelvin_voigt_Disp.txt', '-time', '-closeOnWrite','-node',2 , '-dof', 1, 'disp')
-ops.recorder('Node', '-file', 'kelvin_voigt_Reactions.txt', '-time', '-closeOnWrite','-node',1 , '-dof', 1, 'reaction')
+ops.recorder('Node', '-file', 'KelvinEPP_Disp.txt', '-time', '-closeOnWrite','-node',2 , '-dof', 1, 'disp')
+ops.recorder('Node', '-file', 'KelvinEPP_Reactions.txt', '-time', '-closeOnWrite','-node',1 , '-dof', 1, 'reaction')
 
 # analysis
 
@@ -87,15 +86,15 @@ ops.constraints('Transformation')
 ops.numberer('RCM')
 ops.test('EnergyIncr', 1.0e-10, 100)
 ops.algorithm('KrylovNewton')
-ops.system('UmfPack')
+ops.system('BandGeneral')
 ops.integrator('Newmark', .5, .25)
 #ops.integrator('DisplacementControl', 2, 1, 0.001)
 ops.analysis('Transient')
 
-TmaxAnalysis = 50 * sec
-dtAnalysis = 0.01 * sec
-
+TmaxAnalysis = 5 * sec
+dtAnalysis = 0.1 * sec
 Nsteps = int(TmaxAnalysis/dtAnalysis)
+
 for i in range(Nsteps):
     ops.analyze(1, dtAnalysis)
     print(f"{(i+1)}/{Nsteps}")
@@ -106,8 +105,8 @@ for i in range(Nsteps):
 
 
 
-disp = np.loadtxt("kelvin_voigt_Disp.txt")
-rxn = np.loadtxt("kelvin_voigt_Reactions.txt")
+disp = np.loadtxt("KelvinEPP_Disp.txt")
+rxn = np.loadtxt("KelvinEPP_Reactions.txt")
 plt.plot(disp[:, 1], -rxn[:, 1])
 plt.show()
 

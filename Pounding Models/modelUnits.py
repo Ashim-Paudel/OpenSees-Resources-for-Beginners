@@ -1,6 +1,6 @@
 #length conversion
 m = 1.0
-cm = 100*m # centimeter, needed for displacement input in MultipleSupport excitation
+cm = 0.01*m # centimeter, needed for displacement input in MultipleSupport excitation
 inch = m/39.37
 ft = 12.*inch 
 

@@ -1,5 +1,3 @@
-# elastic perfectly plastic gap material
-
 # import packages
 # opensees packages
 import openseespy.opensees as ops
@@ -15,27 +13,22 @@ from modelUnits import *
 ops.wipe()
 ops.model("BasicBuilder", '-ndm', 1, '-ndf', 1)
 
-gap = 5*cm
+gap = 2*cm
 ops.node(1, *[0])
-ops.node(2, *[gap])
+ops.node(2, *[0])
 
 ops.fix(1, 1)
 
-# epp GAP
-eppGAPMatID = 4
-E = 2e9
+# spring materil
+springID = 3
 Fy = 250*Mpa
-eta = 0.
+E0 = 93500 * kN/m**2
+b = 0.1
+ops.uniaxialMaterial('Steel01', springID, Fy, E0, b)
 
-# E = 1425 * ksi
-# Fy = -15.46 * ksi
-# gap = -0.001
-# eta = -0.01
-
-ops.uniaxialMaterial('ElasticPPGap', eppGAPMatID, E, Fy, gap, eta)
 
 #element('zeroLength', eleTag, *eleNodes, '-mat', *matTags, '-dir', *dirs)
-ops.element('twoNodeLink', 1, *[1, 2], '-mat', eppGAPMatID, '-dir', *[1])
+ops.element('zeroLength', 1, *[1, 2], '-mat', springID, '-dir', *[1])
 
 
 # load assignment
@@ -48,24 +41,24 @@ px = 1000*kN
 ops.load(2, *[px])
 #ops.sp(2, 1, 0.000106952)
 
-
 # recorders
-ops.recorder('Element', '-file', 'eppDisplacement.txt', '-time', '-closeOnWrite','-ele',1 , '-dof', 1, 'deformation')
-ops.recorder('Element', '-file', 'eppReactions.txt', '-time', '-closeOnWrite','-ele',1 , '-dof', 1, 'force')
+ops.recorder('Node', '-file', 'linearSpringCompressionDisp.txt', '-time', '-closeOnWrite','-node',2 , '-dof', 1, 'disp')
+ops.recorder('Node', '-file', 'linearSpringCompressionReactions.txt', '-time', '-closeOnWrite','-node',1 , '-dof', 1, 'reaction')
+ops.record()
+
+# analysis
 
 
 ops.constraints('Plain')
 ops.numberer('RCM')
 ops.test('NormDispIncr', 1.0e-6, 6, 0)
-ops.algorithm('ModifiedNewton')
-ops.system('BandGeneral')  #system ProfileSPD can't solve for negative strain hardening ratio
+ops.algorithm('Newton')
+ops.system('BandGeneral')  #system profileSPD can't solve for negative strain hardening ratio
 #ops.integrator('LoadControl', 1)  #load control can't push our model beyond yield point for negative strain hardening
-ops.integrator('DisplacementControl', 2, 1, 0.01)
+ops.integrator('DisplacementControl', 2, 1, -0.01)
 ops.analysis('Static')
 
-NumSteps = 40
-
-for i in range(0, NumSteps):
+for i in range(0, 500):
     status = ops.analyze(1)
     
     if status != 0:
@@ -79,11 +72,9 @@ for i in range(0, NumSteps):
         break
     #print(ops.getTime(), ops.nodeReaction(1), ops.nodeReaction(2))
 
-disp = np.loadtxt("eppDisplacement.txt")
-rxn = np.loadtxt("eppReactions.txt")
-plt.plot(disp[:, 1]*1000, -rxn[:, 1]/100)
-plt.xlabel("Strain (mm)")
-plt.ylabel("Stress (MPa)")
-plt.title("Stress-Strain Relationship of Elastic Perfectly Plastic Gap Material")
-plt.savefig("EPP_Gap_tension.png")
+
+disp = np.loadtxt("linearSpringCompressionDisp.txt")
+rxn = np.loadtxt("linearSpringCompressionReactions.txt")
+plt.plot(disp[:, 1], -rxn[:, 1])
 plt.show()
+
