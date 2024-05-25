@@ -468,7 +468,7 @@ def runGroundMotionAnalysis(GmFile):
     gmData = np.loadtxt(GmFile).ravel()
 
     GM_dirn = 1
-    GM_fact = 1.0
+    GM_fact = 1.0*g
     gmTS = 2
     dt = 0.01;			# time step for input ground motion
     ops.timeSeries("Path", gmTS, '-dt', dt, '-values', *gmData, '-fact', GM_fact)
@@ -512,18 +512,15 @@ def kelvinVoigtMaterials(idKelvin, LBuildingRNodes, RBuildingLNodes, gap):
 
     # spring materil
     springID = int(f"{idKelvin}{2}")
-    Fy = 250 * Mpa
     E0 = 93500 * kN/m**2
-    b = 0.1
-    ops.uniaxialMaterial('Steel01', springID, Fy, E0, b)
+    ops.uniaxialMaterial('Elastic', springID, E0)
 
     # epp GAP
     eppGAPMatID = int(f"{idKelvin}{3}")
-    E = 2* E0
+    E = 100* E0
     Fy = 250*Mpa
-    eta = 0.1
+    eta = 0
     ops.uniaxialMaterial('ElasticPPGap', eppGAPMatID, 1*E, -1*Fy, -1*gap, eta)
-
 
     ### kelvin voigt construction
     parallelTag = int(f"{idKelvin}{4}")
@@ -532,28 +529,40 @@ def kelvinVoigtMaterials(idKelvin, LBuildingRNodes, RBuildingLNodes, gap):
     seriesTag = int(f"{idKelvin}{5}")
     ops.uniaxialMaterial('Series', seriesTag, *[parallelTag, eppGAPMatID])
 
-    kvID = []
-    for lNode, rNode in zip(LBuildingRNodes, RBuildingLNodes):
-        ops.element('twoNodeLink', int(f"{lNode}{rNode}"), *[lNode, rNode], '-mat', seriesTag, '-dir', *[1, 2, 3])
-        kvID.append(int(f"{lNode}{rNode}"))
+    # creating new nodes for kelvin voigt plus the epp material
+    adjacent_nodes = []
+    for rNode in LBuildingRNodes:
+        node_tag_kv = int(f"{900}{rNode}")
+        ops.node(node_tag_kv, *ops.nodeCoord(rNode))
+        adjacent_nodes.append(node_tag_kv)
+        ops.equalDOF(rNode, node_tag_kv, *[2,3]) #to remove problems
+    
+    kvEleID = []
+    eppEleID = []
+    for lNode,midNode, rNode in zip(LBuildingRNodes, adjacent_nodes, RBuildingLNodes):
+        #element('zeroLength', eleTag, *eleNodes, '-mat', *matTags, '-dir', *dirs, <'-doRayleigh', rFlag=0>, <'-orient', *vecx, *vecyp>)
+        kvEleTag = int(f"{9000}{lNode}")
+        ops.element('zeroLength', kvEleTag, *[lNode, midNode], '-mat', parallelTag, '-dir', *[1])
+        #element('twoNodeLink', eleTag, *eleNodes, '-mat', *matTags, '-dir', *dir, <'-orient', *vecx, *vecyp>, <'-pDelta', *pDeltaVals>, <'-shearDist', *shearDist>, <'-doRayleigh'>, <'-mass', m>)
+        eppEleTag = int(f"{9000}{rNode}")
+        ops.element('twoNodeLink', eppEleTag, *[midNode, rNode], '-mat', eppGAPMatID, '-dir', *[1])
+        kvEleID.append(kvEleTag)
+        eppEleID.append(eppEleTag)
 
-    ops.recorder('Element', '-file', 'testForce.txt', '-time', '-closeOnWrite', '-ele', *kvID,'-dof',1, 'globalForce')
-
-
+    ops.recorder('Element', '-file', 'testForceKelvinVoigt.txt', '-time', '-closeOnWrite', '-ele', *kvEleID,'-dof',1, 'force')
+    ops.recorder('Element', '-file', 'testForceSpringEPPGAP.txt', '-time', '-closeOnWrite', '-ele', *eppEleID,'-dof',1, 'force')
+    print(kvEleID)
 
 ops.wipe()
 ops.model('BasicBuilder', '-ndm', 2, '-ndf', 3)
 #LNodes10 = []
 #RNodes10 = []
 
-gap = 20*cm
-getModel(buildingID=10, NBay=1, NStory=4, LBeam=4, LCol=4, sectionType='RCFiber', startCoor=(0,0))
-getModel(buildingID=20, NBay=1, NStory=7, LBeam=4, LCol=4, sectionType='SteelFiber', startCoor=(4+gap,0))
-#getModel(buildingID=40, NBay=1, NStory=7, LBeam=3, LCol=3, sectionType='RCFiber', startCoor=(14,0))
+gap = 5*cm
+getModel(buildingID=10, NBay=2, NStory=3, LBeam=4, LCol=4, sectionType='RCFiber', startCoor=(0,0))
+getModel(buildingID=20, NBay=1, NStory=7, LBeam=4, LCol=4, sectionType='RCFiber', startCoor=(4*2+gap,0))
+#getModel(buildingID=40, NBay=2, NStory=7, LBeam=3, LCol=3, sectionType='RCFiber', startCoor=(8,0))
 #getModel(buildingID=50, NBay=1, NStory=3, LBeam=4, LCol=3, sectionType='SteelFiber', startCoor=(18,0))
-
-ops.recorder('Node', '-file', "Building10RightNodes_Disp.txt", '-time', '-closeOnWrite', '-node', *RNodes10[:5],'-dof', 1, 'disp')
-ops.recorder('Node', '-file', "Building20LeftNodes_Disp.txt", '-time', '-closeOnWrite', '-node', *LNodes20[:5],'-dof',1, 'disp')
 
 
 print(LNodes10, RNodes10)
@@ -562,17 +571,23 @@ print(LNodes20, RNodes20)
 for a,b in zip(RNodes10, LNodes20):
     print(a,b)
 
+
+lomaPrietaEq = "data/A10000.dat"
+casi68Eq = "data/BM68elc.dat"
+elcentro = "data/elcentro.txt"
+
+
 kelvinVoigtMaterials(100, RNodes10, LNodes20, gap)
 ovs.plot_model()
 plt.show()
 
-lomaPrietaEq = "data/A10000.dat"
-casi68Eq = "data/BM68elc.dat"
+ops.recorder('Node', '-file', "Building10RightNodes_Disp.txt", '-time', '-closeOnWrite', '-node', *RNodes10,'-dof', 1, 'disp')
+ops.recorder('Node', '-file', "Building20LeftNodes_Disp.txt", '-time', '-closeOnWrite', '-node', *LNodes20,'-dof',1, 'disp')
 
-runGravityAnalysis(100)
-ovs.plot_defo()
-plt.show()
+# runGravityAnalysis(100)
+# ovs.plot_defo()
+# plt.show()
 
-runGroundMotionAnalysis(casi68Eq)
+runGroundMotionAnalysis(lomaPrietaEq)
 ovs.plot_defo()
 plt.show()
