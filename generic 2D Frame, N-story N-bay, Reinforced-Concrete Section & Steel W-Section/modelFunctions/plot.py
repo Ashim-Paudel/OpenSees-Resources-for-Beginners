@@ -8,7 +8,7 @@ import numpy as np
 import matplotlib.pyplot as plt
 from modelUnits import *
 
-gap = 0*cm
+gap = 1*mm
 
 
 Building10RNodesDisp = np.loadtxt('Building10RightNodes_Disp.txt', delimiter=" ")
@@ -21,24 +21,26 @@ poundingForceEPP = np.loadtxt('testForceSpringEPPGAP.txt', delimiter=" ")
 NStorey = min(len(Building10RNodesDisp[0]) -1, len(Building20LNodesDisp[0])-1)
 timeSeries = Building10RNodesDisp[:, 0]
 
-fig, ax = plt.subplots(NStorey,1)
+fig, ax = plt.subplots(NStorey,2)
 
 for storey in range(1, NStorey+1):
-    collisonSeries = gap + Building10RNodesDisp[:, storey] - (Building20LNodesDisp[:, storey])
+    collisonSeries = Building10RNodesDisp[:, storey] - (Building20LNodesDisp[:, storey])
     #print(collisonSeries * 1000)
-    isCollided = collisonSeries >= 0
+    isCollided = collisonSeries >= gap
     collisonSeries[~isCollided] = 0
-    poundingForceKelvinVoigt[~isCollided] = 0
-    poundingForceEPP[~isCollided] = 0
+    #poundingForceKelvinVoigt[isCollided] = 0
+    #poundingForceEPP[~isCollided] = 0#
 
-    ax[storey - 1].plot(timeSeries, poundingForceKelvinVoigt[:, storey])
-    ax[storey - 1].plot(timeSeries, isCollided/1e13)
+    ax[storey - 1][0].plot(timeSeries, poundingForceKelvinVoigt[:, storey], label='pounding KV')
+    ax[storey - 1][0].plot(timeSeries, poundingForceEPP[:, storey], label='pounding EPP')
+    ax[storey - 1][1].plot(timeSeries, Building10RNodesDisp[:, storey] , label='left')
+    ax[storey - 1][1].plot(timeSeries, Building20LNodesDisp[:, storey] + gap, label='right')
     #print(collisonSeries * 1000)
     #ax[storey - 1][1].plot(timeSeries, poundingForce[:, storey])
     #ax[storey - 1].plot(timeSeries, Building10RNodesDisp[:, storey], label='left Building')
     #ax[storey - 1].plot(timeSeries, Building20LNodesDisp[:, storey], label='right Building')
 
-
+plt.legend()
 plt.show()
 
 

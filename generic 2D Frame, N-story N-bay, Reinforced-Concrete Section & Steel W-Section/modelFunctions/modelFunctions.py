@@ -79,6 +79,8 @@ def getModel(buildingID, NBay, NStory, LBeam, LCol, sectionType = 'Elastic', sta
 
             print(nodeTag, *nodeCoor)
             ops.node(nodeTag, *(nodeCoor))
+        #ops.equalDOF(LNodes[j], RNodes[j], 2,3)
+
 
     exec(f"LNodes{buildingID} = {LNodes}", globals())
     exec(f"RNodes{buildingID} = {RNodes}", globals())
@@ -458,22 +460,18 @@ def getSteelFiberSection(buildingID, plotSection = False):
     ops.geomTransf('Linear', BeamSecTransf)
 
 
-def runGroundMotionAnalysis(GmFile):
+def runGroundMotionAnalysis(gmData, GM_fact, dt):
     ops.loadConst('-time', 0.0)
 
     DtAnalysis = 0.01 #for analysis
     TmaxAnalysis = 10 #for analysis
     Nstep = int(TmaxAnalysis/DtAnalysis)
     
-    gmData = np.loadtxt(GmFile).ravel()
-
     GM_dirn = 1
-    GM_fact = 1.0*g
     gmTS = 2
-    dt = 0.01;			# time step for input ground motion
     ops.timeSeries("Path", gmTS, '-dt', dt, '-values', *gmData, '-fact', GM_fact)
     #pattern('UniformExcitation', patternTag, dir, '-disp', dispSeriesTag, '-vel', velSeriesTag, '-accel', accelSeriesTag, '-vel0', vel0, '-fact', fact)
-    ops.pattern('UniformExcitation', 300, GM_dirn, '-accel', gmTS)
+    ops.pattern('UniformExcitation', 300, GM_dirn, '-accel', gmTS, '-fact', GM_fact)
 
     
     ops.constraints("Transformation")
@@ -499,8 +497,36 @@ def runGroundMotionAnalysis(GmFile):
     # define damping
     ops.rayleigh(alphaM, betaKcurr, betaKinit, betaKcomm) # RAYLEIGH damping
 
-    status = ops.analyze(Nstep, DtAnalysis)
-    return status
+
+    for i in range(Nstep):
+        status = ops.analyze(1, DtAnalysis)
+        #ovs.plot_defo()
+        #plt.savefig(f'test_figs/{i}_{Nstep}.png')
+        #plt.close()
+        print(f"Ground Motion - {i+1}/{Nstep}")
+
+        if status != 0:
+            print("Analysis failed trying other")
+            ops.algorithm('KrylovNewton')
+            status = ops.analyze(1, DtAnalysis)
+        if status != 0:
+            ops.system('UmfPack')
+            status = ops.analyze(1, DtAnalysis)
+        if status != 0:
+            tol = 1.e-6
+            maxNumIter = 100
+            ops.system("ProfileSPD")
+            ops.test("EnergyIncr", tol, maxNumIter)
+            status = ops.analyze(1, DtAnalysis)
+        if status != 0:
+            print("Breaking analysis")
+            break
+
+        ops.system("ProfileSPD")
+        tol = 1.e-10
+        maxNumIter = 50    
+        ops.test("EnergyIncr", tol, maxNumIter)
+        
 
 
 def kelvinVoigtMaterials(idKelvin, LBuildingRNodes, RBuildingLNodes, gap):
@@ -519,18 +545,15 @@ def kelvinVoigtMaterials(idKelvin, LBuildingRNodes, RBuildingLNodes, gap):
     eppGAPMatID = int(f"{idKelvin}{3}")
     E = 100* E0
     Fy = 250*Mpa
-    eta = 0
-    ops.uniaxialMaterial('ElasticPPGap', eppGAPMatID, 1*E, -1*Fy, -1*gap, eta)
+    eta = 0.1
+    ops.uniaxialMaterial('ElasticPPGap', eppGAPMatID, 1*E, -1*Fy, -1*gap, eta, 'damage')
 
     ### kelvin voigt construction
     parallelTag = int(f"{idKelvin}{4}")
     ops.uniaxialMaterial('Parallel', parallelTag, *[viscousID, springID])
 
-    seriesTag = int(f"{idKelvin}{5}")
-    ops.uniaxialMaterial('Series', seriesTag, *[parallelTag, eppGAPMatID])
-
     # creating new nodes for kelvin voigt plus the epp material
-    adjacent_nodes = []
+    adjacent_nodes = []   
     for rNode in LBuildingRNodes:
         node_tag_kv = int(f"{900}{rNode}")
         ops.node(node_tag_kv, *ops.nodeCoord(rNode))
@@ -558,9 +581,9 @@ ops.model('BasicBuilder', '-ndm', 2, '-ndf', 3)
 #LNodes10 = []
 #RNodes10 = []
 
-gap = 5*cm
-getModel(buildingID=10, NBay=2, NStory=3, LBeam=4, LCol=4, sectionType='RCFiber', startCoor=(0,0))
-getModel(buildingID=20, NBay=1, NStory=7, LBeam=4, LCol=4, sectionType='RCFiber', startCoor=(4*2+gap,0))
+gap = 3*mm
+getModel(buildingID=10, NBay=1, NStory=3, LBeam=4, LCol=4, sectionType='RCFiber', startCoor=(0,0))
+getModel(buildingID=20, NBay=1, NStory=7, LBeam=4, LCol=4, sectionType='RCFiber', startCoor=(4+gap,0))
 #getModel(buildingID=40, NBay=2, NStory=7, LBeam=3, LCol=3, sectionType='RCFiber', startCoor=(8,0))
 #getModel(buildingID=50, NBay=1, NStory=3, LBeam=4, LCol=3, sectionType='SteelFiber', startCoor=(18,0))
 
@@ -571,11 +594,14 @@ print(LNodes20, RNodes20)
 for a,b in zip(RNodes10, LNodes20):
     print(a,b)
 
-
+lomaPrietaEq2 = "data/0493a.smc"
 lomaPrietaEq = "data/A10000.dat"
 casi68Eq = "data/BM68elc.dat"
 elcentro = "data/elcentro.txt"
 
+runGravityAnalysis(100)
+ovs.plot_defo()
+plt.show()
 
 kelvinVoigtMaterials(100, RNodes10, LNodes20, gap)
 ovs.plot_model()
@@ -584,10 +610,8 @@ plt.show()
 ops.recorder('Node', '-file', "Building10RightNodes_Disp.txt", '-time', '-closeOnWrite', '-node', *RNodes10,'-dof', 1, 'disp')
 ops.recorder('Node', '-file', "Building20LeftNodes_Disp.txt", '-time', '-closeOnWrite', '-node', *LNodes20,'-dof',1, 'disp')
 
-# runGravityAnalysis(100)
-# ovs.plot_defo()
-# plt.show()
+gmDatacasi68Eq = np.loadtxt(casi68Eq).ravel()
+gmDataLomaPrietaEq = np.loadtxt(lomaPrietaEq).ravel()
+gmDataLomaPrietaEq2 = np.loadtxt(lomaPrietaEq2, comments='#').ravel()
 
-runGroundMotionAnalysis(lomaPrietaEq)
-ovs.plot_defo()
-plt.show()
+runGroundMotionAnalysis(gmDataLomaPrietaEq, GM_fact=9.81, dt=0.01)

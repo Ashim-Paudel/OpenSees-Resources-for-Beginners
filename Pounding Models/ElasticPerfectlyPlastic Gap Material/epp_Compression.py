@@ -15,9 +15,9 @@ from modelUnits import *
 ops.wipe()
 ops.model("BasicBuilder", '-ndm', 1, '-ndf', 1)
 
-gap = -5*cm
+gap = 5*cm
 ops.node(1, *[0])
-ops.node(2, *[1])
+ops.node(2, *[gap/2])
 
 ops.fix(1, 1)
 
@@ -27,7 +27,7 @@ E = 2e9
 Fy = -250*Mpa
 eta = 0.0
 
-ops.uniaxialMaterial('ElasticPPGap', eppGAPMatID, E, Fy, gap, eta)
+ops.uniaxialMaterial('ElasticPPGap', eppGAPMatID, E, Fy, -1*gap, eta, 'damage')
 ops.element('twoNodeLink', 1, *[1, 2], '-mat', eppGAPMatID, '-dir', *[1])
 
 
@@ -49,30 +49,33 @@ ops.numberer('RCM')
 ops.test('NormDispIncr', 1.0e-6, 6, 0)
 ops.algorithm('ModifiedNewton')
 ops.system('BandGeneral') 
-ops.integrator('DisplacementControl', 2, 1, -0.01)
 ops.analysis('Static')
 
 NumSteps = 40
+ops.integrator('DisplacementControl', 2, 1, -0.01)
+ops.analyze(NumSteps)
+ops.integrator('DisplacementControl', 2, 1, 0.01)
+ops.analyze(NumSteps)
 
-for i in range(0, NumSteps):
-    status = ops.analyze(1)
-    
-    if status != 0:
-        print("Trying other analysis params.")
-        ops.algorithm('ModifiedNewton')
-        ops.test('NormDispIncr', 1.0e-10, 10, 0)
-        status = ops.analyze(1)
-    
-    if status != 0:
-        print("Breaking analysis")
-        break
-    #print(ops.getTime(), ops.nodeReaction(1), ops.nodeReaction(2))
+NumSteps = 60
+ops.integrator('DisplacementControl', 2, 1, -0.01)
+ops.analyze(NumSteps)
+ops.integrator('DisplacementControl', 2, 1, 0.01)
+ops.analyze(NumSteps)
 
+NumSteps = 80
+ops.integrator('DisplacementControl', 2, 1, -0.01)
+ops.analyze(NumSteps)
+ops.integrator('DisplacementControl', 2, 1, 0.01)
+ops.analyze(NumSteps)
+
+#print(ops.getTime(), ops.nodeReaction(1), ops.nodeReaction(2))
 disp = np.loadtxt("eppDisplacement.txt")
 rxn = np.loadtxt("eppReactions.txt")
 plt.plot(disp[:, 1]*1000, -rxn[:, 1]/100)
 plt.xlabel("Strain (mm)")
 plt.ylabel("Stress (MPa)")
 plt.title("Stress-Strain Relationship of Elastic Perfectly Plastic Gap Material in Compression")
-plt.savefig("EPP_Gap_tension.png")
+plt.grid()
+plt.savefig("EPP_Gap_compression.png")
 plt.show()
