@@ -12,7 +12,7 @@ I started learning opensees on April of 2024, and this repository includes all t
 - Pushover Analysis
 - Time History Analysis
 - Building linear and non linear models
-- Pounding Related Elements Verifications
+
 
 **How can it be useful resources?**
 - I have documented even the vary basic concept 
